@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Todo App{% endblock %}</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+</head>
+<body>
+    <header class="container">
+        <nav>
+            <ul>
+                <li><strong><a href="{{ url_for('todos.list_todos') if current_user.is_authenticated else url_for('auth.login') }}">Todo App</a></strong></li>
+            </ul>
+            <ul>
+                {% if current_user.is_authenticated %}
+                <li>{{ current_user.username }}</li>
+                <li>
+                    <form method="post" action="{{ url_for('auth.logout') }}" style="margin:0">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <button type="submit" class="outline secondary" style="margin:0;padding:0.25rem 0.75rem">Log out</button>
+                    </form>
+                </li>
+                {% else %}
+                <li><a href="{{ url_for('auth.login') }}">Log in</a></li>
+                <li><a href="{{ url_for('auth.register') }}">Register</a></li>
+                {% endif %}
+            </ul>
+        </nav>
+    </header>
+    <main class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <article {% if category == 'error' %}aria-invalid="true"{% endif %}>
+            {{ message }}
+        </article>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>

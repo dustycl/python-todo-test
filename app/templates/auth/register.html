@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}Register - Todo App{% endblock %}
+
+{% block content %}
+<article>
+    <h2>Register</h2>
+    <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username" required autofocus
+               minlength="3" maxlength="30" pattern="[a-zA-Z0-9]+">
+        <small>3-30 alphanumeric characters</small>
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" required minlength="8">
+        <small>At least 8 characters</small>
+        <label for="confirm">Confirm Password</label>
+        <input type="password" id="confirm" name="confirm" required>
+        <button type="submit">Register</button>
+    </form>
+    <p>Already have an account? <a href="{{ url_for('auth.login') }}">Log in</a></p>
+</article>
+{% endblock %}
