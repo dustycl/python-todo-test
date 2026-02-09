@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}My Todos{% endblock %}
+
+{% block content %}
+<h2>My Todos</h2>
+
+<form method="post" action="{{ url_for('todos.add') }}" role="group">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="text" name="title" placeholder="What needs to be done?" required maxlength="200" aria-label="New todo">
+    <button type="submit">Add</button>
+</form>
+
+{% set active = todos | selectattr("completed", "equalto", 0) | list %}
+{% set done = todos | selectattr("completed", "equalto", 1) | list %}
+
+{% if not todos %}
+<p>No todos yet. Add one above!</p>
+{% endif %}
+
+{% if active %}
+{% for todo in active %}
+<article style="display:flex; align-items:center; gap:1rem; padding:0.75rem 1rem; margin-bottom:0.5rem">
+    <form method="post" action="{{ url_for('todos.toggle', todo_id=todo['id']) }}" style="margin:0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" style="margin:0;padding:0.25rem 0.5rem;width:auto" class="outline">&#9744;</button>
+    </form>
+    <span style="flex:1">{{ todo['title'] }}</span>
+    <a href="{{ url_for('todos.edit', todo_id=todo['id']) }}" role="button" class="outline secondary" style="margin:0;padding:0.25rem 0.75rem;width:auto">Edit</a>
+    <form method="post" action="{{ url_for('todos.delete', todo_id=todo['id']) }}" style="margin:0" onsubmit="return confirm('Delete this todo?')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" style="margin:0;padding:0.25rem 0.75rem;width:auto" class="outline contrast">Delete</button>
+    </form>
+</article>
+{% endfor %}
+{% endif %}
+
+{% if done %}
+<details {% if active %}open{% endif %}>
+    <summary>Completed ({{ done | length }})</summary>
+    {% for todo in done %}
+    <article style="display:flex; align-items:center; gap:1rem; padding:0.75rem 1rem; margin-bottom:0.5rem; opacity:0.7">
+        <form method="post" action="{{ url_for('todos.toggle', todo_id=todo['id']) }}" style="margin:0">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" style="margin:0;padding:0.25rem 0.5rem;width:auto" class="outline">&#9745;</button>
+        </form>
+        <span style="flex:1; text-decoration:line-through">{{ todo['title'] }}</span>
+        <form method="post" action="{{ url_for('todos.delete', todo_id=todo['id']) }}" style="margin:0" onsubmit="return confirm('Delete this todo?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" style="margin:0;padding:0.25rem 0.75rem;width:auto" class="outline contrast">Delete</button>
+        </form>
+    </article>
+    {% endfor %}
+</details>
+{% endif %}
+{% endblock %}

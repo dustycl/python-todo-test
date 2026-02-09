@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Todo{% endblock %}
+
+{% block content %}
+<article>
+    <h2>Edit Todo</h2>
+    <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label for="title">Title</label>
+        <input type="text" id="title" name="title" value="{{ todo['title'] }}" required maxlength="200" autofocus>
+        <div role="group">
+            <button type="submit">Save</button>
+            <a href="{{ url_for('todos.list_todos') }}" role="button" class="secondary">Cancel</a>
+        </div>
+    </form>
+</article>
+{% endblock %}
