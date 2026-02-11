@@ -1,7 +1,7 @@
 import os
 import secrets
 
-from flask import Flask, request, session
+from flask import Flask, render_template, request, session
 
 from . import db
 from .auth import bp as auth_bp, init_login_manager
@@ -47,6 +47,15 @@ def create_app(test_config=None):
             if not token or token != session.get("csrf_token"):
                 from flask import abort
                 abort(400, "CSRF token missing or invalid.")
+
+    # Error handlers
+    @app.errorhandler(404)
+    def not_found(e):
+        return render_template("404.html"), 404
+
+    @app.errorhandler(500)
+    def server_error(e):
+        return render_template("500.html"), 500
 
     # Register blueprints
     app.register_blueprint(auth_bp)
