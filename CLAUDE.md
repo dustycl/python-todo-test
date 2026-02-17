@@ -8,8 +8,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Install dependencies
 pip install -r requirements.txt
 
-# Initialize database (also auto-runs on first app start)
-flask --app app init-db
+# Run pending database migrations (also auto-runs on app start)
+flask --app app migrate
 
 # Run development server (localhost:5000, debug mode)
 python run.py
@@ -31,7 +31,7 @@ Flask app using the **app factory pattern** (`create_app()` in `app/__init__.py`
 - **`app/auth.py`** — Authentication blueprint (`/auth/` prefix): register, login, logout. Uses `flask-login` for session management and `werkzeug.security` for password hashing.
 - **`app/todos.py`** — Todo CRUD blueprint (root prefix): list, create, edit, toggle, delete. All queries enforce `user_id` filtering for cross-user data isolation.
 
-**Database layer** (`app/db.py`): Raw SQLite3 with no ORM. Connection cached on Flask's `g` object per request. Schema has two tables: `users` and `todos` (with foreign key from `todos.user_id` to `users.id`).
+**Database layer** (`app/db.py`): Raw SQLite3 with no ORM. Connection cached on Flask's `g` object per request. Schema has two tables: `users` and `todos` (with foreign key from `todos.user_id` to `users.id`). Schema changes are managed via forward-only numbered SQL migrations in `migrations/` tracked by a `schema_migrations` table.
 
 **CSRF protection**: Custom implementation in `app/__init__.py` — generates per-session token via `secrets.token_hex(32)`, injects into templates via context processor, validates on all POST requests in `before_request` hook.
 
@@ -48,3 +48,4 @@ Tests in `tests/` use pytest fixtures from `tests/conftest.py` that create a fre
 - POST-only for all state-changing operations
 - All todo queries must include `user_id` filtering
 - Environment config via `.env` file (`SECRET_KEY`, `DATABASE`)
+- Schema changes must be done via migration files in `migrations/` (e.g. `003_description.sql`), never by editing the schema directly — migrations run automatically on app startup

@@ -59,7 +59,7 @@ def test_todos_user_id_index_exists(app):
 def test_init_db_command(runner):
     """The init-db CLI command should run without error."""
     result = runner.invoke(args=["init-db"])
-    assert "Initialized the database" in result.output
+    assert "up to date" in result.output or "migration" in result.output
 
 
 def test_users_table_unique_username(app):

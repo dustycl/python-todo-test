@@ -61,10 +61,8 @@ def create_app(test_config=None):
     app.register_blueprint(auth_bp)
     app.register_blueprint(todos_bp)
 
-    # Auto-create tables if the database file doesn't exist yet
-    db_path = app.config["DATABASE"]
-    if not os.path.exists(db_path):
-        with app.app_context():
-            db.init_db()
+    # Run any pending database migrations
+    with app.app_context():
+        db.run_migrations()
 
     return app
