@@ -387,3 +387,196 @@ def test_list_sorts_by_due_date(client, app):
     data = response.data.decode()
     # Dated todos come before undated; earlier date first
     assert data.index("Sooner") < data.index("Later") < data.index("No date")
+
+
+# --- Search tests ---
+
+def test_search_by_keyword(client):
+    """Search should return only todos matching the keyword."""
+    register_and_login(client)
+    add_todo(client, "Buy groceries")
+    add_todo(client, "Walk the dog")
+    add_todo(client, "Buy birthday present")
+
+    response = client.get("/?q=Buy")
+    data = response.data.decode()
+    assert "Buy groceries" in data
+    assert "Buy birthday present" in data
+    assert "Walk the dog" not in data
+
+
+def test_search_case_insensitive(client):
+    """Search should be case-insensitive."""
+    register_and_login(client)
+    add_todo(client, "Buy Groceries")
+
+    response = client.get("/?q=buy")
+    assert b"Buy Groceries" in response.data
+
+
+def test_search_empty_query_returns_all(client):
+    """Empty search query should return all todos."""
+    register_and_login(client)
+    add_todo(client, "Todo one")
+    add_todo(client, "Todo two")
+
+    response = client.get("/?q=")
+    assert b"Todo one" in response.data
+    assert b"Todo two" in response.data
+
+
+def test_search_no_results(client):
+    """Search with no matches should show filtered empty state."""
+    register_and_login(client)
+    add_todo(client, "Buy groceries")
+
+    response = client.get("/?q=nonexistent")
+    assert b"Buy groceries" not in response.data
+    assert b"No todos match your filters" in response.data
+
+
+# --- Status filter tests ---
+
+def test_filter_status_active(client, app):
+    """Status=active should show only incomplete todos."""
+    register_and_login(client)
+    add_todo(client, "Active todo")
+    add_todo(client, "Done todo")
+
+    with app.app_context():
+        db = get_db()
+        todo = db.execute("SELECT id FROM todos WHERE title = 'Done todo'").fetchone()
+        todo_id = todo["id"]
+
+    csrf = get_csrf(client)
+    client.post(f"/toggle/{todo_id}", data={"csrf_token": csrf})
+
+    response = client.get("/?status=active")
+    data = response.data.decode()
+    assert "Active todo" in data
+    assert "Done todo" not in data
+
+
+def test_filter_status_completed(client, app):
+    """Status=completed should show only completed todos."""
+    register_and_login(client)
+    add_todo(client, "Active todo")
+    add_todo(client, "Done todo")
+
+    with app.app_context():
+        db = get_db()
+        todo = db.execute("SELECT id FROM todos WHERE title = 'Done todo'").fetchone()
+        todo_id = todo["id"]
+
+    csrf = get_csrf(client)
+    client.post(f"/toggle/{todo_id}", data={"csrf_token": csrf})
+
+    response = client.get("/?status=completed")
+    data = response.data.decode()
+    assert "Done todo" in data
+    assert "Active todo" not in data
+
+
+# --- Due date filter tests ---
+
+def test_filter_due_overdue(client):
+    """Due=overdue should show only todos with past due dates."""
+    register_and_login(client)
+    add_todo(client, "Overdue task", due_date="2020-01-01")
+    add_todo(client, "Future task", due_date="2099-12-31")
+    add_todo(client, "No date task")
+
+    response = client.get("/?due=overdue")
+    data = response.data.decode()
+    assert "Overdue task" in data
+    assert "Future task" not in data
+    assert "No date task" not in data
+
+
+def test_filter_due_today(client):
+    """Due=today should show only todos due today."""
+    from datetime import date
+    register_and_login(client)
+    today_str = date.today().isoformat()
+    add_todo(client, "Today task", due_date=today_str)
+    add_todo(client, "Future task", due_date="2099-12-31")
+
+    response = client.get("/?due=today")
+    data = response.data.decode()
+    assert "Today task" in data
+    assert "Future task" not in data
+
+
+def test_filter_due_week(client):
+    """Due=week should show todos due within the next 7 days."""
+    from datetime import date, timedelta
+    register_and_login(client)
+    today = date.today()
+    add_todo(client, "This week task", due_date=(today + timedelta(days=3)).isoformat())
+    add_todo(client, "Far future task", due_date="2099-12-31")
+    add_todo(client, "Past task", due_date="2020-01-01")
+
+    response = client.get("/?due=week")
+    data = response.data.decode()
+    assert "This week task" in data
+    assert "Far future task" not in data
+    assert "Past task" not in data
+
+
+def test_filter_due_none(client):
+    """Due=none should show only todos without a due date."""
+    register_and_login(client)
+    add_todo(client, "Has date", due_date="2026-06-01")
+    add_todo(client, "No date todo")
+
+    response = client.get("/?due=none")
+    data = response.data.decode()
+    assert "No date todo" in data
+    assert "Has date" not in data
+
+
+# --- Combined filter tests ---
+
+def test_combined_search_and_status(client, app):
+    """Search and status filter should work together."""
+    register_and_login(client)
+    add_todo(client, "Buy groceries")
+    add_todo(client, "Buy present")
+
+    with app.app_context():
+        db = get_db()
+        todo = db.execute("SELECT id FROM todos WHERE title = 'Buy groceries'").fetchone()
+        todo_id = todo["id"]
+
+    csrf = get_csrf(client)
+    client.post(f"/toggle/{todo_id}", data={"csrf_token": csrf})
+
+    response = client.get("/?q=Buy&status=active")
+    data = response.data.decode()
+    assert "Buy present" in data
+    assert "Buy groceries" not in data
+
+
+def test_invalid_filter_values_default_to_all(client):
+    """Unknown filter values should behave like 'all'."""
+    register_and_login(client)
+    add_todo(client, "Some todo")
+
+    response = client.get("/?status=bogus&due=invalid")
+    assert b"Some todo" in response.data
+
+
+def test_search_respects_user_isolation(client):
+    """Search should never return another user's todos."""
+    register_and_login(client, username="alice")
+    add_todo(client, "Alice secret task")
+
+    csrf = get_csrf(client)
+    client.post("/auth/logout", data={"csrf_token": csrf})
+    register_and_login(client, username="bob")
+    add_todo(client, "Bob public task")
+
+    response = client.get("/?q=secret")
+    data = response.data.decode()
+    assert "Alice" not in data
+    assert "Bob" not in data

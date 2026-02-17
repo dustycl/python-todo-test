@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
@@ -21,14 +21,59 @@ bp = Blueprint("todos", __name__)
 @bp.route("/")
 @login_required
 def list_todos():
-    """List all todos for the current user."""
+    """List all todos for the current user, with optional search and filters."""
     db = get_db()
+    today = date.today()
+
+    # Base query — always filter by user
+    clauses = ["user_id = ?"]
+    params = [current_user.id]
+
+    # Keyword search
+    q = request.args.get("q", "").strip()
+    if q:
+        q_escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        clauses.append("title LIKE ? ESCAPE '\\'")
+        params.append(f"%{q_escaped}%")
+
+    # Status filter
+    status = request.args.get("status", "all")
+    if status == "active":
+        clauses.append("completed = 0")
+    elif status == "completed":
+        clauses.append("completed = 1")
+
+    # Due date filter
+    due = request.args.get("due", "all")
+    if due == "overdue":
+        clauses.append("due_date IS NOT NULL AND due_date < ?")
+        params.append(today.isoformat())
+    elif due == "today":
+        clauses.append("due_date = ?")
+        params.append(today.isoformat())
+    elif due == "week":
+        week_end = (today + timedelta(days=6)).isoformat()
+        clauses.append("due_date IS NOT NULL AND due_date >= ? AND due_date <= ?")
+        params.append(today.isoformat())
+        params.append(week_end)
+    elif due == "none":
+        clauses.append("due_date IS NULL")
+
+    where = " AND ".join(clauses)
     todos = db.execute(
-        "SELECT * FROM todos WHERE user_id = ? "
+        f"SELECT * FROM todos WHERE {where} "
         "ORDER BY completed ASC, due_date IS NULL ASC, due_date ASC, created_at DESC",
-        (current_user.id,),
+        params,
     ).fetchall()
-    return render_template("todos/list.html", todos=todos, today=date.today().isoformat())
+
+    return render_template(
+        "todos/list.html",
+        todos=todos,
+        today=today.isoformat(),
+        search_q=q,
+        filter_status=status,
+        filter_due=due,
+    )
 
 
 @bp.route("/add", methods=["POST"])

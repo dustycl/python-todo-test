@@ -5,6 +5,34 @@
 {% block content %}
 <h2>My Todos</h2>
 
+<form method="get" action="{{ url_for('todos.list_todos') }}" style="margin-bottom:0.75rem">
+    <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap">
+        <input type="search" name="q" value="{{ search_q }}" placeholder="Search todos..." aria-label="Search todos"
+               style="margin:0; padding:0.35rem 0.5rem 0.35rem 2.25rem; height:auto; flex:1; min-width:10rem; font-size:0.875rem">
+        <select name="status" aria-label="Filter by status"
+                style="margin:0; padding:0.35rem 0.5rem; height:auto; width:auto; font-size:0.875rem">
+            <option value="all" {{ 'selected' if filter_status == 'all' }}>All statuses</option>
+            <option value="active" {{ 'selected' if filter_status == 'active' }}>Active</option>
+            <option value="completed" {{ 'selected' if filter_status == 'completed' }}>Completed</option>
+        </select>
+        <select name="due" aria-label="Filter by due date"
+                style="margin:0; padding:0.35rem 0.5rem; height:auto; width:auto; font-size:0.875rem">
+            <option value="all" {{ 'selected' if filter_due == 'all' }}>All dates</option>
+            <option value="overdue" {{ 'selected' if filter_due == 'overdue' }}>Overdue</option>
+            <option value="today" {{ 'selected' if filter_due == 'today' }}>Due today</option>
+            <option value="week" {{ 'selected' if filter_due == 'week' }}>Due this week</option>
+            <option value="none" {{ 'selected' if filter_due == 'none' }}>No due date</option>
+        </select>
+        <button type="submit" style="margin:0; padding:0.35rem 0.75rem; height:auto; width:auto; font-size:0.875rem">Filter</button>
+        {% if search_q or filter_status != 'all' or filter_due != 'all' %}
+        <a href="{{ url_for('todos.list_todos') }}" style="font-size:0.8rem; white-space:nowrap">Clear</a>
+        {% endif %}
+    </div>
+</form>
+{% if search_q or filter_status != 'all' or filter_due != 'all' %}
+<p style="margin:0 0 0.75rem"><small>{{ todos | length }} result{{ 's' if todos | length != 1 }}</small></p>
+{% endif %}
+
 <form method="post" action="{{ url_for('todos.add') }}" role="group">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <input type="text" name="title" placeholder="What needs to be done?" required maxlength="200" aria-label="New todo">
@@ -16,7 +44,11 @@
 {% set done = todos | selectattr("completed", "equalto", 1) | list %}
 
 {% if not todos %}
+{% if search_q or filter_status != 'all' or filter_due != 'all' %}
+<p>No todos match your filters. <a href="{{ url_for('todos.list_todos') }}">Clear filters</a></p>
+{% else %}
 <p>No todos yet. Add one above!</p>
+{% endif %}
 {% endif %}
 
 {% if active %}
