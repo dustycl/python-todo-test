@@ -1,7 +1,19 @@
+from datetime import date
+
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from .db import get_db
+
+
+def _validate_due_date(raw):
+    """Validate and return a due_date string, or None if empty. Raises ValueError on bad format."""
+    if not raw or not raw.strip():
+        return None
+    raw = raw.strip()
+    # Validate YYYY-MM-DD format by parsing
+    date.fromisoformat(raw)
+    return raw
 
 bp = Blueprint("todos", __name__)
 
@@ -12,10 +24,11 @@ def list_todos():
     """List all todos for the current user."""
     db = get_db()
     todos = db.execute(
-        "SELECT * FROM todos WHERE user_id = ? ORDER BY completed ASC, created_at DESC",
+        "SELECT * FROM todos WHERE user_id = ? "
+        "ORDER BY completed ASC, due_date IS NULL ASC, due_date ASC, created_at DESC",
         (current_user.id,),
     ).fetchall()
-    return render_template("todos/list.html", todos=todos)
+    return render_template("todos/list.html", todos=todos, today=date.today().isoformat())
 
 
 @bp.route("/add", methods=["POST"])
@@ -23,16 +36,23 @@ def list_todos():
 def add():
     """Add a new todo."""
     title = request.form.get("title", "").strip()
+    raw_due_date = request.form.get("due_date", "")
 
     if not title:
         flash("Title is required.", "error")
     elif len(title) > 200:
         flash("Title must be 200 characters or less.", "error")
     else:
+        try:
+            due_date = _validate_due_date(raw_due_date)
+        except ValueError:
+            flash("Invalid due date format. Use YYYY-MM-DD.", "error")
+            return redirect(url_for("todos.list_todos"))
+
         db = get_db()
         db.execute(
-            "INSERT INTO todos (user_id, title) VALUES (?, ?)",
-            (current_user.id, title),
+            "INSERT INTO todos (user_id, title, due_date) VALUES (?, ?, ?)",
+            (current_user.id, title, due_date),
         )
         db.commit()
         flash("Todo added.", "success")
@@ -73,16 +93,23 @@ def edit(todo_id):
 
     if request.method == "POST":
         title = request.form.get("title", "").strip()
+        raw_due_date = request.form.get("due_date", "")
 
         if not title:
             flash("Title is required.", "error")
         elif len(title) > 200:
             flash("Title must be 200 characters or less.", "error")
         else:
+            try:
+                due_date = _validate_due_date(raw_due_date)
+            except ValueError:
+                flash("Invalid due date format. Use YYYY-MM-DD.", "error")
+                return render_template("todos/edit.html", todo=todo)
+
             db.execute(
-                "UPDATE todos SET title = ?, updated_at = CURRENT_TIMESTAMP "
+                "UPDATE todos SET title = ?, due_date = ?, updated_at = CURRENT_TIMESTAMP "
                 "WHERE id = ? AND user_id = ?",
-                (title, todo_id, current_user.id),
+                (title, due_date, todo_id, current_user.id),
             )
             db.commit()
             flash("Todo updated.", "success")

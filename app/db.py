@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS todos (
     user_id INTEGER NOT NULL,
     title TEXT NOT NULL,
     completed INTEGER NOT NULL DEFAULT 0,
+    due_date TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users (id)

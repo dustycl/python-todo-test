@@ -33,13 +33,13 @@ def register_and_login(client, username="testuser", password="password123"):
     return csrf
 
 
-def add_todo(client, title="Test todo"):
+def add_todo(client, title="Test todo", due_date=None):
     """Add a todo and return the CSRF token used."""
     csrf = get_csrf(client)
-    client.post("/add", data={
-        "csrf_token": csrf,
-        "title": title,
-    }, follow_redirects=True)
+    data = {"csrf_token": csrf, "title": title}
+    if due_date is not None:
+        data["due_date"] = due_date
+    client.post("/add", data=data, follow_redirects=True)
     return csrf
 
 
@@ -300,3 +300,90 @@ def test_user_cannot_delete_other_users_todo(client, app):
         db = get_db()
         count = db.execute("SELECT COUNT(*) FROM todos").fetchone()[0]
         assert count == 1
+
+
+# --- Due date tests ---
+
+def test_add_todo_with_due_date(client, app):
+    register_and_login(client)
+    add_todo(client, "Dated todo", due_date="2026-03-15")
+
+    with app.app_context():
+        db = get_db()
+        todo = db.execute("SELECT * FROM todos").fetchone()
+        assert todo["due_date"] == "2026-03-15"
+
+
+def test_add_todo_without_due_date(client, app):
+    register_and_login(client)
+    add_todo(client, "No date todo")
+
+    with app.app_context():
+        db = get_db()
+        todo = db.execute("SELECT * FROM todos").fetchone()
+        assert todo["due_date"] is None
+
+
+def test_add_todo_invalid_due_date(client):
+    register_and_login(client)
+    csrf = get_csrf(client)
+    response = client.post("/add", data={
+        "csrf_token": csrf,
+        "title": "Bad date",
+        "due_date": "not-a-date",
+    }, follow_redirects=True)
+    assert b"Invalid due date" in response.data
+
+
+def test_edit_due_date(client, app):
+    register_and_login(client)
+    add_todo(client, "Change my date", due_date="2026-03-15")
+
+    with app.app_context():
+        db = get_db()
+        todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
+
+    csrf = get_csrf(client)
+    client.post(f"/edit/{todo_id}", data={
+        "csrf_token": csrf,
+        "title": "Change my date",
+        "due_date": "2026-04-01",
+    }, follow_redirects=True)
+
+    with app.app_context():
+        db = get_db()
+        todo = db.execute("SELECT * FROM todos WHERE id = ?", (todo_id,)).fetchone()
+        assert todo["due_date"] == "2026-04-01"
+
+
+def test_edit_clear_due_date(client, app):
+    register_and_login(client)
+    add_todo(client, "Clear my date", due_date="2026-03-15")
+
+    with app.app_context():
+        db = get_db()
+        todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
+
+    csrf = get_csrf(client)
+    client.post(f"/edit/{todo_id}", data={
+        "csrf_token": csrf,
+        "title": "Clear my date",
+        "due_date": "",
+    }, follow_redirects=True)
+
+    with app.app_context():
+        db = get_db()
+        todo = db.execute("SELECT * FROM todos WHERE id = ?", (todo_id,)).fetchone()
+        assert todo["due_date"] is None
+
+
+def test_list_sorts_by_due_date(client, app):
+    register_and_login(client)
+    add_todo(client, "No date", due_date=None)
+    add_todo(client, "Later", due_date="2026-06-01")
+    add_todo(client, "Sooner", due_date="2026-03-01")
+
+    response = client.get("/")
+    data = response.data.decode()
+    # Dated todos come before undated; earlier date first
+    assert data.index("Sooner") < data.index("Later") < data.index("No date")

@@ -9,6 +9,8 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <label for="title">Title</label>
         <input type="text" id="title" name="title" value="{{ todo['title'] }}" required maxlength="200" autofocus>
+        <label for="due_date">Due Date</label>
+        <input type="date" id="due_date" name="due_date" value="{{ todo['due_date'] or '' }}">
         <div role="group">
             <button type="submit">Save</button>
             <a href="{{ url_for('todos.list_todos') }}" role="button" class="secondary">Cancel</a>

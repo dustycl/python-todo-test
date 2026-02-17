@@ -8,6 +8,7 @@
 <form method="post" action="{{ url_for('todos.add') }}" role="group">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <input type="text" name="title" placeholder="What needs to be done?" required maxlength="200" aria-label="New todo">
+    <input type="date" name="due_date" aria-label="Due date" style="max-width:12rem">
     <button type="submit">Add</button>
 </form>
 
@@ -25,7 +26,14 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button type="submit" style="margin:0;padding:0.25rem 0.5rem;width:auto" class="outline">&#9744;</button>
     </form>
-    <span style="flex:1">{{ todo['title'] }}</span>
+    <span style="flex:1">
+        {{ todo['title'] }}
+        {% if todo['due_date'] %}
+            <small style="{% if todo['due_date'] < today %}color:var(--pico-color-red-500, #e53935);font-weight:bold{% endif %}">
+                ({{ todo['due_date'] }})
+            </small>
+        {% endif %}
+    </span>
     <a href="{{ url_for('todos.edit', todo_id=todo['id']) }}" role="button" class="outline secondary" style="margin:0;padding:0.25rem 0.75rem;width:auto">Edit</a>
     <form method="post" action="{{ url_for('todos.delete', todo_id=todo['id']) }}" style="margin:0" onsubmit="return confirm('Delete this todo?')">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -44,7 +52,12 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <button type="submit" style="margin:0;padding:0.25rem 0.5rem;width:auto" class="outline">&#9745;</button>
         </form>
-        <span style="flex:1; text-decoration:line-through">{{ todo['title'] }}</span>
+        <span style="flex:1; text-decoration:line-through">
+            {{ todo['title'] }}
+            {% if todo['due_date'] %}
+                <small>({{ todo['due_date'] }})</small>
+            {% endif %}
+        </span>
         <form method="post" action="{{ url_for('todos.delete', todo_id=todo['id']) }}" style="margin:0" onsubmit="return confirm('Delete this todo?')">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <button type="submit" style="margin:0;padding:0.25rem 0.75rem;width:auto" class="outline contrast">Delete</button>
