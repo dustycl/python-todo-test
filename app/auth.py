@@ -1,8 +1,12 @@
+import logging
+
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import LoginManager, UserMixin, current_user, login_user, logout_user
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from .db import get_db
+
+logger = logging.getLogger(__name__)
 
 bp = Blueprint("auth", __name__, url_prefix="/auth")
 
@@ -65,7 +69,11 @@ def register():
                 db.commit()
             except db.IntegrityError:
                 error = f"Username '{username}' is already taken."
+            except Exception:
+                logger.error("Failed to register user: %s", username, exc_info=True)
+                error = "An error occurred during registration."
             else:
+                logger.info("User registered: %s", username)
                 flash("Registration successful. Please log in.", "success")
                 return redirect(url_for("auth.login"))
 
@@ -83,17 +91,24 @@ def login():
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
 
-        db = get_db()
-        row = db.execute(
-            "SELECT id, username, password_hash FROM users WHERE username = ?",
-            (username,),
-        ).fetchone()
+        try:
+            db = get_db()
+            row = db.execute(
+                "SELECT id, username, password_hash FROM users WHERE username = ?",
+                (username,),
+            ).fetchone()
+        except Exception:
+            logger.error("Database error during login for username: %s", username, exc_info=True)
+            flash("An error occurred during login.", "error")
+            return render_template("auth/login.html")
 
         if row is None or not check_password_hash(row["password_hash"], password):
+            logger.warning("Failed login attempt for username: %s", username)
             flash("Invalid username or password.", "error")
         else:
             user = User(row["id"], row["username"])
             login_user(user)
+            logger.info("User logged in: %s (id=%s)", user.username, user.id)
             next_page = request.args.get("next")
             return redirect(next_page or url_for("todos.list_todos"))
 
@@ -102,6 +117,7 @@ def login():
 
 @bp.route("/logout", methods=["POST"])
 def logout():
+    logger.info("User logged out: %s", current_user.username)
     logout_user()
     flash("You have been logged out.", "success")
     return redirect(url_for("auth.login"))
