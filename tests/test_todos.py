@@ -33,12 +33,14 @@ def register_and_login(client, username="testuser", password="password123"):
     return csrf
 
 
-def add_todo(client, title="Test todo", due_date=None):
+def add_todo(client, title="Test todo", due_date=None, tags=None):
     """Add a todo and return the CSRF token used."""
     csrf = get_csrf(client)
     data = {"csrf_token": csrf, "title": title}
     if due_date is not None:
         data["due_date"] = due_date
+    if tags is not None:
+        data["tags"] = tags
     client.post("/add", data=data, follow_redirects=True)
     return csrf
 
@@ -580,3 +582,176 @@ def test_search_respects_user_isolation(client):
     data = response.data.decode()
     assert "Alice" not in data
     assert "Bob" not in data
+
+
+# --- Tag tests ---
+
+def test_add_todo_with_tags(client, app):
+    """Adding a todo with tags should store them."""
+    register_and_login(client)
+    add_todo(client, "Tagged todo", tags="work, personal")
+
+    with app.app_context():
+        db = get_db()
+        todo = db.execute("SELECT id FROM todos").fetchone()
+        tags = db.execute(
+            "SELECT t.name FROM tags t JOIN todo_tags tt ON t.id = tt.tag_id "
+            "WHERE tt.todo_id = ? ORDER BY t.name",
+            (todo["id"],),
+        ).fetchall()
+        assert [r["name"] for r in tags] == ["personal", "work"]
+
+
+def test_tags_display_on_list(client):
+    """Tags should appear on the todo list page."""
+    register_and_login(client)
+    add_todo(client, "Tagged todo", tags="work, urgent")
+
+    response = client.get("/")
+    data = response.data.decode()
+    assert "work" in data
+    assert "urgent" in data
+
+
+def test_filter_by_tag(client):
+    """Filtering by tag should show only matching todos."""
+    register_and_login(client)
+    add_todo(client, "Work task", tags="work")
+    add_todo(client, "Home task", tags="home")
+
+    response = client.get("/?tag=work")
+    data = response.data.decode()
+    assert "Work task" in data
+    assert "Home task" not in data
+
+
+def test_edit_tags(client, app):
+    """Editing a todo should update its tags."""
+    register_and_login(client)
+    add_todo(client, "Change tags", tags="old")
+
+    with app.app_context():
+        db = get_db()
+        todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
+
+    csrf = get_csrf(client)
+    client.post(f"/edit/{todo_id}", data={
+        "csrf_token": csrf,
+        "title": "Change tags",
+        "tags": "new, updated",
+    }, follow_redirects=True)
+
+    with app.app_context():
+        db = get_db()
+        tags = db.execute(
+            "SELECT t.name FROM tags t JOIN todo_tags tt ON t.id = tt.tag_id "
+            "WHERE tt.todo_id = ? ORDER BY t.name",
+            (todo_id,),
+        ).fetchall()
+        assert [r["name"] for r in tags] == ["new", "updated"]
+
+
+def test_edit_clear_tags(client, app):
+    """Editing with empty tags should remove all tags."""
+    register_and_login(client)
+    add_todo(client, "Remove tags", tags="old")
+
+    with app.app_context():
+        db = get_db()
+        todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
+
+    csrf = get_csrf(client)
+    client.post(f"/edit/{todo_id}", data={
+        "csrf_token": csrf,
+        "title": "Remove tags",
+        "tags": "",
+    }, follow_redirects=True)
+
+    with app.app_context():
+        db = get_db()
+        count = db.execute(
+            "SELECT COUNT(*) FROM todo_tags WHERE todo_id = ?", (todo_id,)
+        ).fetchone()[0]
+        assert count == 0
+
+
+def test_delete_todo_cleans_up_tags(client, app):
+    """Deleting a todo should remove its tag associations."""
+    register_and_login(client)
+    add_todo(client, "Delete me", tags="cleanup")
+
+    with app.app_context():
+        db = get_db()
+        todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
+
+    csrf = get_csrf(client)
+    client.post(f"/delete/{todo_id}", data={"csrf_token": csrf}, follow_redirects=True)
+
+    with app.app_context():
+        db = get_db()
+        count = db.execute(
+            "SELECT COUNT(*) FROM todo_tags WHERE todo_id = ?", (todo_id,)
+        ).fetchone()[0]
+        assert count == 0
+
+
+def test_duplicate_tags_deduplicated(client, app):
+    """Duplicate tag names should be deduplicated."""
+    register_and_login(client)
+    add_todo(client, "Dupes", tags="work, work, WORK")
+
+    with app.app_context():
+        db = get_db()
+        todo = db.execute("SELECT id FROM todos").fetchone()
+        tags = db.execute(
+            "SELECT t.name FROM tags t JOIN todo_tags tt ON t.id = tt.tag_id "
+            "WHERE tt.todo_id = ?",
+            (todo["id"],),
+        ).fetchall()
+        assert len(tags) == 1
+        assert tags[0]["name"] == "work"
+
+
+def test_empty_tags_ignored(client, app):
+    """Empty or whitespace-only tags should be ignored."""
+    register_and_login(client)
+    add_todo(client, "Empty tags", tags=",  , ,valid")
+
+    with app.app_context():
+        db = get_db()
+        todo = db.execute("SELECT id FROM todos").fetchone()
+        tags = db.execute(
+            "SELECT t.name FROM tags t JOIN todo_tags tt ON t.id = tt.tag_id "
+            "WHERE tt.todo_id = ?",
+            (todo["id"],),
+        ).fetchall()
+        assert len(tags) == 1
+        assert tags[0]["name"] == "valid"
+
+
+def test_cross_user_tag_isolation(client, app):
+    """User B should not see User A's tags in the filter dropdown."""
+    register_and_login(client, username="alice")
+    add_todo(client, "Alice task", tags="secret-tag")
+
+    csrf = get_csrf(client)
+    client.post("/auth/logout", data={"csrf_token": csrf})
+    register_and_login(client, username="bob")
+
+    response = client.get("/")
+    assert b"secret-tag" not in response.data
+
+
+def test_edit_page_shows_current_tags(client, app):
+    """The edit page should pre-populate the tags field."""
+    register_and_login(client)
+    add_todo(client, "Edit me", tags="work, urgent")
+
+    with app.app_context():
+        db = get_db()
+        todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
+
+    response = client.get(f"/edit/{todo_id}")
+    data = response.data.decode()
+    assert "urgent" in data
+    assert "work" in data

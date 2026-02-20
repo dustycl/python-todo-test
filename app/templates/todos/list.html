@@ -23,13 +23,22 @@
             <option value="week" {{ 'selected' if filter_due == 'week' }}>Due this week</option>
             <option value="none" {{ 'selected' if filter_due == 'none' }}>No due date</option>
         </select>
+        {% if all_tags %}
+        <select name="tag" aria-label="Filter by tag"
+                style="margin:0; padding:0.35rem 0.5rem; height:auto; width:auto; font-size:0.875rem">
+            <option value="all" {{ 'selected' if filter_tag == 'all' }}>All tags</option>
+            {% for t in all_tags %}
+            <option value="{{ t }}" {{ 'selected' if filter_tag == t }}>{{ t }}</option>
+            {% endfor %}
+        </select>
+        {% endif %}
         <button type="submit" style="margin:0; padding:0.35rem 0.75rem; height:auto; width:auto; font-size:0.875rem">Filter</button>
-        {% if search_q or filter_status != 'all' or filter_due != 'all' %}
+        {% if search_q or filter_status != 'all' or filter_due != 'all' or filter_tag != 'all' %}
         <a href="{{ url_for('todos.list_todos') }}" style="font-size:0.8rem; white-space:nowrap">Clear</a>
         {% endif %}
     </div>
 </form>
-{% if search_q or filter_status != 'all' or filter_due != 'all' %}
+{% if search_q or filter_status != 'all' or filter_due != 'all' or filter_tag != 'all' %}
 <p style="margin:0 0 0.75rem"><small>{{ todos | length }} result{{ 's' if todos | length != 1 }}</small></p>
 {% endif %}
 
@@ -37,14 +46,23 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <input type="text" name="title" placeholder="What needs to be done?" required maxlength="200" aria-label="New todo">
     <input type="date" name="due_date" aria-label="Due date" style="max-width:12rem">
+    <input type="text" name="tags" placeholder="Tags (comma-separated)" aria-label="Tags" list="tag-suggestions" style="max-width:14rem">
     <button type="submit">Add</button>
 </form>
+
+{% if all_tags %}
+<datalist id="tag-suggestions">
+    {% for t in all_tags %}
+    <option value="{{ t }}">
+    {% endfor %}
+</datalist>
+{% endif %}
 
 {% set active = todos | selectattr("completed", "equalto", 0) | list %}
 {% set done = todos | selectattr("completed", "equalto", 1) | list %}
 
 {% if not todos %}
-{% if search_q or filter_status != 'all' or filter_due != 'all' %}
+{% if search_q or filter_status != 'all' or filter_due != 'all' or filter_tag != 'all' %}
 <p>No todos match your filters. <a href="{{ url_for('todos.list_todos') }}">Clear filters</a></p>
 {% else %}
 <p>No todos yet. Add one above!</p>
@@ -64,6 +82,11 @@
             <small style="{% if todo['due_date'] < today %}color:var(--pico-color-red-500, #e53935);font-weight:bold{% endif %}">
                 ({{ todo['due_date'] }})
             </small>
+        {% endif %}
+        {% if tags_map.get(todo['id']) %}
+            {% for tag in tags_map[todo['id']] %}
+            <mark style="font-size:0.75rem; padding:0.1rem 0.4rem; margin-left:0.25rem; border-radius:1rem">{{ tag }}</mark>
+            {% endfor %}
         {% endif %}
     </span>
     <a href="{{ url_for('todos.edit', todo_id=todo['id']) }}" role="button" class="outline secondary" style="margin:0;padding:0.25rem 0.75rem;width:auto">Edit</a>
@@ -88,6 +111,11 @@
             {{ todo['title'] }}
             {% if todo['due_date'] %}
                 <small>({{ todo['due_date'] }})</small>
+            {% endif %}
+            {% if tags_map.get(todo['id']) %}
+                {% for tag in tags_map[todo['id']] %}
+                <mark style="font-size:0.75rem; padding:0.1rem 0.4rem; margin-left:0.25rem; border-radius:1rem">{{ tag }}</mark>
+                {% endfor %}
             {% endif %}
         </span>
         <form method="post" action="{{ url_for('todos.delete', todo_id=todo['id']) }}" style="margin:0" onsubmit="return confirm('Delete this todo?')">

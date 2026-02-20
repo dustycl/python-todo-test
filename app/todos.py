@@ -18,6 +18,79 @@ def _validate_due_date(raw):
     date.fromisoformat(raw)
     return raw
 
+
+def _parse_tags(raw):
+    """Split comma-separated tag input into a deduplicated list of tag names."""
+    if not raw or not raw.strip():
+        return []
+    seen = set()
+    tags = []
+    for part in raw.split(","):
+        name = part.strip().lower()
+        if name and len(name) <= 50 and name not in seen:
+            seen.add(name)
+            tags.append(name)
+    return tags
+
+
+def _sync_tags(db, user_id, todo_id, tag_names):
+    """Create any new tags and set the todo's tags to exactly tag_names."""
+    # Remove existing associations
+    db.execute("DELETE FROM todo_tags WHERE todo_id = ?", (todo_id,))
+
+    for name in tag_names:
+        # Insert tag if it doesn't exist for this user
+        db.execute(
+            "INSERT OR IGNORE INTO tags (user_id, name) VALUES (?, ?)",
+            (user_id, name),
+        )
+        tag = db.execute(
+            "SELECT id FROM tags WHERE user_id = ? AND name = ?",
+            (user_id, name),
+        ).fetchone()
+        db.execute(
+            "INSERT INTO todo_tags (todo_id, tag_id) VALUES (?, ?)",
+            (todo_id, tag["id"]),
+        )
+
+
+def _get_user_tags(db, user_id):
+    """Return all tag names for a user, ordered alphabetically."""
+    rows = db.execute(
+        "SELECT DISTINCT name FROM tags WHERE user_id = ? ORDER BY name",
+        (user_id,),
+    ).fetchall()
+    return [row["name"] for row in rows]
+
+
+def _get_todo_tags(db, todo_id):
+    """Return tag names for a specific todo."""
+    rows = db.execute(
+        "SELECT t.name FROM tags t "
+        "JOIN todo_tags tt ON t.id = tt.tag_id "
+        "WHERE tt.todo_id = ? ORDER BY t.name",
+        (todo_id,),
+    ).fetchall()
+    return [row["name"] for row in rows]
+
+
+def _get_tags_for_todos(db, todo_ids):
+    """Return a dict mapping todo_id -> list of tag names."""
+    if not todo_ids:
+        return {}
+    placeholders = ",".join("?" * len(todo_ids))
+    rows = db.execute(
+        f"SELECT tt.todo_id, t.name FROM tags t "
+        f"JOIN todo_tags tt ON t.id = tt.tag_id "
+        f"WHERE tt.todo_id IN ({placeholders}) ORDER BY t.name",
+        todo_ids,
+    ).fetchall()
+    result = {tid: [] for tid in todo_ids}
+    for row in rows:
+        result[row["todo_id"]].append(row["name"])
+    return result
+
+
 bp = Blueprint("todos", __name__)
 
 
@@ -28,8 +101,8 @@ def list_todos():
     db = get_db()
     today = date.today()
 
-    # Base query — always filter by user
-    clauses = ["user_id = ?"]
+    # Base query — always filter by user (qualified for JOIN compatibility)
+    clauses = ["todos.user_id = ?"]
     params = [current_user.id]
 
     # Keyword search
@@ -62,12 +135,31 @@ def list_todos():
     elif due == "none":
         clauses.append("due_date IS NULL")
 
+    # Tag filter
+    tag = request.args.get("tag", "all")
+    join_clause = ""
+    if tag and tag != "all":
+        join_clause = (
+            " JOIN todo_tags tt ON todos.id = tt.todo_id"
+            " JOIN tags tg ON tt.tag_id = tg.id"
+        )
+        clauses.append("tg.user_id = ? AND tg.name = ?")
+        params.append(current_user.id)
+        params.append(tag)
+
     where = " AND ".join(clauses)
     todos = db.execute(
-        f"SELECT * FROM todos WHERE {where} "
+        f"SELECT todos.* FROM todos{join_clause} WHERE {where} "
         "ORDER BY completed ASC, due_date IS NULL ASC, due_date ASC, created_at DESC",
         params,
     ).fetchall()
+
+    # Fetch tags for all returned todos
+    todo_ids = [t["id"] for t in todos]
+    tags_map = _get_tags_for_todos(db, todo_ids)
+
+    # All user tags for the filter dropdown and datalist
+    all_tags = _get_user_tags(db, current_user.id)
 
     return render_template(
         "todos/list.html",
@@ -76,6 +168,9 @@ def list_todos():
         search_q=q,
         filter_status=status,
         filter_due=due,
+        filter_tag=tag,
+        all_tags=all_tags,
+        tags_map=tags_map,
     )
 
 
@@ -97,12 +192,16 @@ def add():
             flash("Invalid due date format. Use YYYY-MM-DD.", "error")
             return redirect(url_for("todos.list_todos"))
 
+        tag_names = _parse_tags(request.form.get("tags", ""))
+
         try:
             db = get_db()
-            db.execute(
+            cursor = db.execute(
                 "INSERT INTO todos (user_id, title, due_date) VALUES (?, ?, ?)",
                 (current_user.id, title, due_date),
             )
+            if tag_names:
+                _sync_tags(db, current_user.id, cursor.lastrowid, tag_names)
             db.commit()
             logger.info("Todo created by user %s: %r", current_user.id, title)
             flash("Todo added.", "success")
@@ -165,7 +264,11 @@ def edit(todo_id):
                 due_date = _validate_due_date(raw_due_date)
             except ValueError:
                 flash("Invalid due date format. Use YYYY-MM-DD.", "error")
-                return render_template("todos/edit.html", todo=todo)
+                return render_template("todos/edit.html", todo=todo,
+                                       todo_tags=_get_todo_tags(db, todo_id),
+                                       all_tags=_get_user_tags(db, current_user.id))
+
+            tag_names = _parse_tags(request.form.get("tags", ""))
 
             try:
                 db.execute(
@@ -173,6 +276,7 @@ def edit(todo_id):
                     "WHERE id = ? AND user_id = ?",
                     (title, due_date, todo_id, current_user.id),
                 )
+                _sync_tags(db, current_user.id, todo_id, tag_names)
                 db.commit()
                 logger.info("Todo %s edited by user %s: %r", todo_id, current_user.id, title)
                 flash("Todo updated.", "success")
@@ -181,7 +285,9 @@ def edit(todo_id):
                 logger.error("Failed to edit todo %s for user %s", todo_id, current_user.id, exc_info=True)
                 flash("An error occurred while updating the todo.", "error")
 
-    return render_template("todos/edit.html", todo=todo)
+    todo_tags = _get_todo_tags(db, todo_id)
+    all_tags = _get_user_tags(db, current_user.id)
+    return render_template("todos/edit.html", todo=todo, todo_tags=todo_tags, all_tags=all_tags)
 
 
 @bp.route("/delete/<int:todo_id>", methods=["POST"])
