@@ -1,0 +1,256 @@
+/* === Layout & Spacing === */
+
+.todo-page h2 {
+    margin-bottom: 1.25rem;
+}
+
+.section-gap {
+    margin-bottom: 1.25rem;
+}
+
+/* === Search & Filter Bar === */
+
+.search-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.search-row input[type="search"] {
+    margin: 0;
+    flex: 1;
+    min-width: 10rem;
+}
+
+.filter-toggle {
+    background: none;
+    border: none;
+    color: var(--pico-secondary);
+    font-size: 0.85rem;
+    cursor: pointer;
+    padding: 0.35rem 0.5rem;
+    margin: 0;
+    white-space: nowrap;
+    width: auto;
+}
+
+.filter-toggle:hover {
+    color: var(--pico-primary);
+}
+
+.filter-active-dot {
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    background: var(--pico-primary);
+    border-radius: 50%;
+    margin-left: 0.25rem;
+    vertical-align: middle;
+}
+
+.filter-panel {
+    display: none;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    align-items: center;
+    padding-top: 0.5rem;
+}
+
+.filter-panel.open {
+    display: flex;
+}
+
+.filter-panel select {
+    margin: 0;
+    padding: 0.35rem 0.5rem;
+    height: auto;
+    width: auto;
+    font-size: 0.85rem;
+}
+
+.filter-clear {
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+
+.result-count {
+    margin: 0.25rem 0 0;
+    color: var(--pico-muted-color);
+    font-size: 0.8rem;
+}
+
+/* === Add Form === */
+
+.add-form-main {
+    margin-bottom: 0;
+}
+
+.add-form-options {
+    margin-top: 0.5rem;
+    margin-bottom: 0;
+    border: none;
+    padding: 0;
+}
+
+.add-form-options summary {
+    font-size: 0.85rem;
+    color: var(--pico-muted-color);
+    cursor: pointer;
+    list-style: none;
+    padding: 0;
+}
+
+.add-form-options summary::-webkit-details-marker {
+    display: none;
+}
+
+.add-form-options summary::before {
+    content: "+ ";
+}
+
+.add-form-options[open] summary::before {
+    content: "− ";
+}
+
+.add-form-options .option-fields {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.add-form-options .option-fields input {
+    margin: 0;
+    font-size: 0.875rem;
+}
+
+.add-form-options .option-fields input[type="date"] {
+    max-width: 12rem;
+}
+
+.add-form-options .option-fields input[type="text"] {
+    max-width: 16rem;
+    flex: 1;
+    min-width: 10rem;
+}
+
+/* === Todo Items === */
+
+.todo-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.85rem 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.todo-toggle {
+    margin: 0;
+}
+
+.todo-toggle button {
+    margin: 0;
+    padding: 0.2rem 0.45rem;
+    width: auto;
+    font-size: 1.1rem;
+    line-height: 1;
+}
+
+.todo-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.todo-title {
+    display: block;
+    line-height: 1.4;
+}
+
+.todo-meta {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 0.2rem;
+}
+
+.todo-due {
+    font-size: 0.78rem;
+    color: var(--pico-muted-color);
+}
+
+.todo-due.overdue {
+    color: var(--pico-color-red-500, #e53935);
+    font-weight: 600;
+}
+
+.todo-tag {
+    font-size: 0.7rem;
+    padding: 0.1rem 0.45rem;
+    border-radius: 1rem;
+    line-height: 1.4;
+}
+
+.todo-actions {
+    display: flex;
+    gap: 0.35rem;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.todo-actions form {
+    margin: 0;
+}
+
+.todo-actions a,
+.todo-actions button {
+    margin: 0;
+    padding: 0.2rem 0.6rem;
+    width: auto;
+    font-size: 0.8rem;
+}
+
+/* === Completed Todos === */
+
+.completed-section {
+    margin-top: 1.5rem;
+}
+
+.completed-section summary {
+    color: var(--pico-muted-color);
+    font-size: 0.9rem;
+}
+
+.completed-section .todo-item {
+    opacity: 0.6;
+}
+
+.completed-section .todo-title {
+    text-decoration: line-through;
+}
+
+/* === Empty State === */
+
+.empty-state {
+    text-align: center;
+    color: var(--pico-muted-color);
+    padding: 2rem 0;
+}
+
+/* === Edit Page === */
+
+.edit-form label {
+    font-weight: 500;
+}
+
+.edit-form .button-row {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+}
+
+.edit-form .button-row a {
+    width: auto;
+}
+
+/* === Filter auto-submit script === */

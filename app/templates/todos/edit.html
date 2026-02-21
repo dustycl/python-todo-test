@@ -5,7 +5,7 @@
 {% block content %}
 <article>
     <h2>Edit Todo</h2>
-    <form method="post">
+    <form method="post" class="edit-form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <label for="title">Title</label>
         <input type="text" id="title" name="title" value="{{ todo['title'] }}" required maxlength="200" autofocus>
