@@ -33,7 +33,7 @@ def register_and_login(client, username="testuser", password="password123"):
     return csrf
 
 
-def add_todo(client, title="Test todo", due_date=None, tags=None):
+def add_todo(client, title="Test todo", due_date=None, tags=None, description=None):
     """Add a todo and return the CSRF token used."""
     csrf = get_csrf(client)
     data = {"csrf_token": csrf, "title": title}
@@ -41,6 +41,8 @@ def add_todo(client, title="Test todo", due_date=None, tags=None):
         data["due_date"] = due_date
     if tags is not None:
         data["tags"] = tags
+    if description is not None:
+        data["description"] = description
     client.post("/add", data=data, follow_redirects=True)
     return csrf
 
@@ -755,3 +757,105 @@ def test_edit_page_shows_current_tags(client, app):
     data = response.data.decode()
     assert "urgent" in data
     assert "work" in data
+
+
+# --- Description tests ---
+
+
+def test_add_todo_with_description(client, app):
+    """Adding a todo with a description stores it in the database."""
+    register_and_login(client)
+    add_todo(client, "Described todo", description="Some details here")
+
+    with app.app_context():
+        db = get_db()
+        todo = db.execute("SELECT * FROM todos").fetchone()
+        assert todo["description"] == "Some details here"
+
+
+def test_add_todo_without_description(client, app):
+    """Adding a todo without a description stores NULL."""
+    register_and_login(client)
+    add_todo(client, "No description")
+
+    with app.app_context():
+        db = get_db()
+        todo = db.execute("SELECT * FROM todos").fetchone()
+        assert todo["description"] is None
+
+
+def test_add_todo_long_description(client):
+    """A description over 2000 characters is rejected."""
+    register_and_login(client)
+    response = client.post("/add", data={
+        "csrf_token": get_csrf(client),
+        "title": "Long desc",
+        "description": "x" * 2001,
+    }, follow_redirects=True)
+    assert b"2000 characters or less" in response.data
+
+
+def test_edit_description(client, app):
+    """Editing a todo can update the description."""
+    register_and_login(client)
+    add_todo(client, "Edit desc", description="Original")
+
+    with app.app_context():
+        db = get_db()
+        todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
+
+    csrf = get_csrf(client)
+    client.post(f"/edit/{todo_id}", data={
+        "csrf_token": csrf,
+        "title": "Edit desc",
+        "description": "Updated",
+    }, follow_redirects=True)
+
+    with app.app_context():
+        db = get_db()
+        todo = db.execute("SELECT * FROM todos WHERE id = ?", (todo_id,)).fetchone()
+        assert todo["description"] == "Updated"
+
+
+def test_edit_clear_description(client, app):
+    """Editing a todo can clear the description."""
+    register_and_login(client)
+    add_todo(client, "Clear desc", description="Will be cleared")
+
+    with app.app_context():
+        db = get_db()
+        todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
+
+    csrf = get_csrf(client)
+    client.post(f"/edit/{todo_id}", data={
+        "csrf_token": csrf,
+        "title": "Clear desc",
+        "description": "",
+    }, follow_redirects=True)
+
+    with app.app_context():
+        db = get_db()
+        todo = db.execute("SELECT * FROM todos WHERE id = ?", (todo_id,)).fetchone()
+        assert todo["description"] is None
+
+
+def test_description_displayed_on_list(client):
+    """The description should appear on the todo list page."""
+    register_and_login(client)
+    add_todo(client, "Visible desc", description="Check this text")
+
+    response = client.get("/")
+    assert b"Check this text" in response.data
+
+
+def test_edit_page_shows_current_description(client, app):
+    """The edit page should pre-populate the description field."""
+    register_and_login(client)
+    add_todo(client, "Edit page desc", description="Pre-filled text")
+
+    with app.app_context():
+        db = get_db()
+        todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
+
+    response = client.get(f"/edit/{todo_id}")
+    assert b"Pre-filled text" in response.data

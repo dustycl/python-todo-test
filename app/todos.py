@@ -180,11 +180,14 @@ def add():
     """Add a new todo."""
     title = request.form.get("title", "").strip()
     raw_due_date = request.form.get("due_date", "")
+    description = request.form.get("description", "").strip() or None
 
     if not title:
         flash("Title is required.", "error")
     elif len(title) > 200:
         flash("Title must be 200 characters or less.", "error")
+    elif description and len(description) > 2000:
+        flash("Description must be 2000 characters or less.", "error")
     else:
         try:
             due_date = _validate_due_date(raw_due_date)
@@ -197,8 +200,8 @@ def add():
         try:
             db = get_db()
             cursor = db.execute(
-                "INSERT INTO todos (user_id, title, due_date) VALUES (?, ?, ?)",
-                (current_user.id, title, due_date),
+                "INSERT INTO todos (user_id, title, due_date, description) VALUES (?, ?, ?, ?)",
+                (current_user.id, title, due_date, description),
             )
             if tag_names:
                 _sync_tags(db, current_user.id, cursor.lastrowid, tag_names)
@@ -254,11 +257,14 @@ def edit(todo_id):
     if request.method == "POST":
         title = request.form.get("title", "").strip()
         raw_due_date = request.form.get("due_date", "")
+        description = request.form.get("description", "").strip() or None
 
         if not title:
             flash("Title is required.", "error")
         elif len(title) > 200:
             flash("Title must be 200 characters or less.", "error")
+        elif description and len(description) > 2000:
+            flash("Description must be 2000 characters or less.", "error")
         else:
             try:
                 due_date = _validate_due_date(raw_due_date)
@@ -272,9 +278,9 @@ def edit(todo_id):
 
             try:
                 db.execute(
-                    "UPDATE todos SET title = ?, due_date = ?, updated_at = CURRENT_TIMESTAMP "
+                    "UPDATE todos SET title = ?, due_date = ?, description = ?, updated_at = CURRENT_TIMESTAMP "
                     "WHERE id = ? AND user_id = ?",
-                    (title, due_date, todo_id, current_user.id),
+                    (title, due_date, description, todo_id, current_user.id),
                 )
                 _sync_tags(db, current_user.id, todo_id, tag_names)
                 db.commit()

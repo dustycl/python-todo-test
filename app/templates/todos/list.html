@@ -58,6 +58,7 @@
         <div class="option-fields">
             <input type="date" name="due_date" aria-label="Due date">
             <input type="text" name="tags" placeholder="Tags (comma-separated)" aria-label="Tags" list="tag-suggestions">
+            <textarea name="description" placeholder="Description (optional)" aria-label="Description" rows="2" maxlength="2000"></textarea>
         </div>
     </details>
 </form>
@@ -92,6 +93,9 @@
     </form>
     <div class="todo-content">
         <span class="todo-title">{{ todo['title'] }}</span>
+        {% if todo['description'] %}
+        <p class="todo-description">{{ todo['description'] }}</p>
+        {% endif %}
         {% if todo['due_date'] or tags_map.get(todo['id']) %}
         <div class="todo-meta">
             {% if todo['due_date'] %}
@@ -127,6 +131,9 @@
         </form>
         <div class="todo-content">
             <span class="todo-title">{{ todo['title'] }}</span>
+            {% if todo['description'] %}
+            <p class="todo-description">{{ todo['description'] }}</p>
+            {% endif %}
             {% if todo['due_date'] or tags_map.get(todo['id']) %}
             <div class="todo-meta">
                 {% if todo['due_date'] %}

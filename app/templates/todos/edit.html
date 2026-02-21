@@ -11,6 +11,8 @@
         <input type="text" id="title" name="title" value="{{ todo['title'] }}" required maxlength="200" autofocus>
         <label for="due_date">Due Date</label>
         <input type="date" id="due_date" name="due_date" value="{{ todo['due_date'] or '' }}">
+        <label for="description">Description</label>
+        <textarea id="description" name="description" rows="3" maxlength="2000" placeholder="Optional description">{{ todo['description'] or '' }}</textarea>
         <label for="tags">Tags</label>
         <input type="text" id="tags" name="tags" value="{{ todo_tags | join(', ') }}" placeholder="Tags (comma-separated)" list="tag-suggestions">
         {% if all_tags %}
