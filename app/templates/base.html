@@ -29,18 +29,50 @@
             </ul>
         </nav>
     </header>
-    <main class="container">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="toast-container">
         {% for category, message in messages %}
-        <article {% if category == 'error' %}aria-invalid="true"{% endif %}>
-            {{ message }}
-        </article>
+        <div class="toast {% if category == 'error' %}toast-error{% endif %} {% if 'undo-link' in message %}toast-undo{% endif %}">
+            {{ message|safe }}
+        </div>
         {% endfor %}
-        {% endif %}
-        {% endwith %}
+    </div>
+    {% endif %}
+    {% endwith %}
 
+    <main class="container">
         {% block content %}{% endblock %}
     </main>
+
+    <script>
+    document.querySelectorAll('.toast').forEach(function(toast) {
+        var hasUndo = toast.classList.contains('toast-undo');
+        var timeout = hasUndo ? 10000 : 3000;
+        var bar = document.createElement('div');
+        bar.className = 'toast-progress';
+        bar.style.animationDuration = timeout + 'ms';
+        toast.appendChild(bar);
+        setTimeout(function() {
+            toast.style.opacity = '0';
+            setTimeout(function() { toast.remove(); }, 300);
+        }, timeout);
+    });
+    document.querySelectorAll('.undo-link').forEach(function(link) {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            var form = document.createElement('form');
+            form.method = 'POST';
+            form.action = this.getAttribute('data-restore-url');
+            var csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrf_token';
+            csrfInput.value = '{{ csrf_token }}';
+            form.appendChild(csrfInput);
+            document.body.appendChild(form);
+            form.submit();
+        });
+    });
+    </script>
 </body>
 </html>

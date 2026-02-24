@@ -253,4 +253,76 @@
     width: auto;
 }
 
+/* === Toast Notifications === */
+
+.toast-container {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.toast {
+    position: relative;
+    overflow: hidden;
+    background: var(--pico-card-background-color);
+    border: 1px solid var(--pico-primary);
+    border-left: 4px solid var(--pico-primary);
+    border-radius: 0.25rem;
+    padding: 0.75rem 1.25rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    font-size: 0.9rem;
+    max-width: 24rem;
+    transition: opacity 0.3s ease;
+}
+
+.toast-progress {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 3px;
+    width: 100%;
+    background: var(--pico-primary);
+    opacity: 0.5;
+    animation: toast-shrink linear forwards;
+}
+
+.toast-error .toast-progress {
+    background: var(--pico-color-red-500, #e53935);
+}
+
+.toast-undo .toast-progress {
+    background: var(--pico-color-amber-500, #ff9800);
+}
+
+@keyframes toast-shrink {
+    from { width: 100%; }
+    to { width: 0%; }
+}
+
+.toast-error {
+    border-color: var(--pico-color-red-500, #e53935);
+    border-left-color: var(--pico-color-red-500, #e53935);
+}
+
+.toast-undo {
+    border-color: var(--pico-color-amber-500, #ff9800);
+    border-left-color: var(--pico-color-amber-500, #ff9800);
+}
+
+.toast .undo-link {
+    color: var(--pico-primary);
+    text-decoration: underline;
+    cursor: pointer;
+    font-weight: 600;
+    margin-left: 0.5rem;
+}
+
+.toast .undo-link:hover {
+    color: var(--pico-primary-hover);
+}
+
 /* === Filter auto-submit script === */

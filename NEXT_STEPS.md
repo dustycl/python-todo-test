@@ -10,11 +10,11 @@ Ideas for future development of the todo app.
 - **Migration system** — forward-only numbered SQL migrations
 - **Logging** — request tracking, auth events, and CRUD operations
 - **UI cleanup** — progressive disclosure and dedicated stylesheet
+- **Todo descriptions** — optional body text beyond just the title
 
 ## Feature Additions
 
 - **Priority levels** — high/medium/low with visual indicators and sorting
-- **Todo descriptions** — optional body text beyond just the title
 - **Bulk operations** — "delete all completed", "mark all as done"
 - **Dark mode toggle** — the template already has `data-theme="light"`, just needs a switcher
 - **Import/export** — CSV or JSON export of todos

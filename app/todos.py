@@ -102,7 +102,7 @@ def list_todos():
     today = date.today()
 
     # Base query — always filter by user (qualified for JOIN compatibility)
-    clauses = ["todos.user_id = ?"]
+    clauses = ["todos.user_id = ?", "todos.deleted_at IS NULL"]
     params = [current_user.id]
 
     # Keyword search
@@ -223,7 +223,7 @@ def toggle(todo_id):
         db = get_db()
         result = db.execute(
             "UPDATE todos SET completed = NOT completed, updated_at = CURRENT_TIMESTAMP "
-            "WHERE id = ? AND user_id = ?",
+            "WHERE id = ? AND user_id = ? AND deleted_at IS NULL",
             (todo_id, current_user.id),
         )
         db.commit()
@@ -246,7 +246,7 @@ def edit(todo_id):
     """Edit a todo's title."""
     db = get_db()
     todo = db.execute(
-        "SELECT * FROM todos WHERE id = ? AND user_id = ?",
+        "SELECT * FROM todos WHERE id = ? AND user_id = ? AND deleted_at IS NULL",
         (todo_id, current_user.id),
     ).fetchone()
 
@@ -279,7 +279,7 @@ def edit(todo_id):
             try:
                 db.execute(
                     "UPDATE todos SET title = ?, due_date = ?, description = ?, updated_at = CURRENT_TIMESTAMP "
-                    "WHERE id = ? AND user_id = ?",
+                    "WHERE id = ? AND user_id = ? AND deleted_at IS NULL",
                     (title, due_date, description, todo_id, current_user.id),
                 )
                 _sync_tags(db, current_user.id, todo_id, tag_names)
@@ -299,11 +299,12 @@ def edit(todo_id):
 @bp.route("/delete/<int:todo_id>", methods=["POST"])
 @login_required
 def delete(todo_id):
-    """Delete a todo."""
+    """Soft-delete a todo (sets deleted_at instead of removing the row)."""
     try:
         db = get_db()
         result = db.execute(
-            "DELETE FROM todos WHERE id = ? AND user_id = ?",
+            "UPDATE todos SET deleted_at = datetime('now') "
+            "WHERE id = ? AND user_id = ? AND deleted_at IS NULL",
             (todo_id, current_user.id),
         )
         db.commit()
@@ -316,6 +317,36 @@ def delete(todo_id):
         logger.warning("Delete failed: todo %s not found for user %s", todo_id, current_user.id)
         abort(404)
 
-    logger.info("Todo %s deleted by user %s", todo_id, current_user.id)
-    flash("Todo deleted.", "success")
+    logger.info("Todo %s soft-deleted by user %s", todo_id, current_user.id)
+    undo_url = url_for("todos.restore", todo_id=todo_id)
+    flash(
+        f'Todo deleted. <a href="#" class="undo-link" data-restore-url="{undo_url}">Undo</a>',
+        "success",
+    )
+    return redirect(url_for("todos.list_todos"))
+
+
+@bp.route("/restore/<int:todo_id>", methods=["POST"])
+@login_required
+def restore(todo_id):
+    """Restore a soft-deleted todo (undo delete)."""
+    try:
+        db = get_db()
+        result = db.execute(
+            "UPDATE todos SET deleted_at = NULL "
+            "WHERE id = ? AND user_id = ? AND deleted_at IS NOT NULL",
+            (todo_id, current_user.id),
+        )
+        db.commit()
+    except Exception:
+        logger.error("Failed to restore todo %s for user %s", todo_id, current_user.id, exc_info=True)
+        flash("An error occurred while restoring the todo.", "error")
+        return redirect(url_for("todos.list_todos"))
+
+    if result.rowcount == 0:
+        logger.warning("Restore failed: todo %s not found or not deleted for user %s", todo_id, current_user.id)
+        abort(404)
+
+    logger.info("Todo %s restored by user %s", todo_id, current_user.id)
+    flash("Todo restored.", "success")
     return redirect(url_for("todos.list_todos"))

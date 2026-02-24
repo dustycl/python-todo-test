@@ -216,10 +216,18 @@ def test_delete_todo(client, app):
         "csrf_token": csrf,
     }, follow_redirects=True)
     assert b"Todo deleted" in response.data
+    assert b"Undo" in response.data
 
     with app.app_context():
         db = get_db()
-        count = db.execute("SELECT COUNT(*) FROM todos").fetchone()[0]
+        # Row still exists but is soft-deleted
+        todo = db.execute("SELECT * FROM todos WHERE id = ?", (todo_id,)).fetchone()
+        assert todo is not None
+        assert todo["deleted_at"] is not None
+        # Not visible in normal queries
+        count = db.execute(
+            "SELECT COUNT(*) FROM todos WHERE deleted_at IS NULL"
+        ).fetchone()[0]
         assert count == 0
 
 
@@ -677,8 +685,8 @@ def test_edit_clear_tags(client, app):
         assert count == 0
 
 
-def test_delete_todo_cleans_up_tags(client, app):
-    """Deleting a todo should remove its tag associations."""
+def test_delete_todo_preserves_tags(client, app):
+    """Soft-deleting a todo should preserve its tag associations for restore."""
     register_and_login(client)
     add_todo(client, "Delete me", tags="cleanup")
 
@@ -694,7 +702,7 @@ def test_delete_todo_cleans_up_tags(client, app):
         count = db.execute(
             "SELECT COUNT(*) FROM todo_tags WHERE todo_id = ?", (todo_id,)
         ).fetchone()[0]
-        assert count == 0
+        assert count == 1
 
 
 def test_duplicate_tags_deduplicated(client, app):
@@ -859,3 +867,161 @@ def test_edit_page_shows_current_description(client, app):
 
     response = client.get(f"/edit/{todo_id}")
     assert b"Pre-filled text" in response.data
+
+
+# --- Soft delete / restore tests ---
+
+
+def test_restore_todo(client, app):
+    """Restoring a soft-deleted todo should make it visible again."""
+    register_and_login(client)
+    add_todo(client, "Restore me")
+
+    with app.app_context():
+        db = get_db()
+        todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
+
+    csrf = get_csrf(client)
+    client.post(f"/delete/{todo_id}", data={"csrf_token": csrf})
+
+    response = client.post(f"/restore/{todo_id}", data={
+        "csrf_token": csrf,
+    }, follow_redirects=True)
+    assert b"Todo restored" in response.data
+    assert b"Restore me" in response.data
+
+    with app.app_context():
+        db = get_db()
+        todo = db.execute("SELECT * FROM todos WHERE id = ?", (todo_id,)).fetchone()
+        assert todo["deleted_at"] is None
+
+
+def test_restore_nonexistent_todo(client):
+    """Restore should 404 for non-existent todos."""
+    register_and_login(client)
+    csrf = get_csrf(client)
+    response = client.post("/restore/9999", data={"csrf_token": csrf})
+    assert response.status_code == 404
+
+
+def test_restore_non_deleted_todo(client, app):
+    """Restore should 404 for a todo that isn't deleted."""
+    register_and_login(client)
+    add_todo(client, "Not deleted")
+
+    with app.app_context():
+        db = get_db()
+        todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
+
+    csrf = get_csrf(client)
+    response = client.post(f"/restore/{todo_id}", data={"csrf_token": csrf})
+    assert response.status_code == 404
+
+
+def test_deleted_todo_not_in_list(client, app):
+    """Soft-deleted todos should not appear in the list view."""
+    register_and_login(client)
+    add_todo(client, "Visible todo")
+    add_todo(client, "Deleted todo")
+
+    with app.app_context():
+        db = get_db()
+        todo_id = db.execute(
+            "SELECT id FROM todos WHERE title = 'Deleted todo'"
+        ).fetchone()["id"]
+
+    csrf = get_csrf(client)
+    client.post(f"/delete/{todo_id}", data={"csrf_token": csrf})
+
+    response = client.get("/")
+    assert b"Visible todo" in response.data
+    assert b"Deleted todo" not in response.data
+
+
+def test_cannot_edit_deleted_todo(client, app):
+    """Editing a soft-deleted todo should return 404."""
+    register_and_login(client)
+    add_todo(client, "Delete then edit")
+
+    with app.app_context():
+        db = get_db()
+        todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
+
+    csrf = get_csrf(client)
+    client.post(f"/delete/{todo_id}", data={"csrf_token": csrf})
+
+    response = client.get(f"/edit/{todo_id}")
+    assert response.status_code == 404
+
+
+def test_cannot_toggle_deleted_todo(client, app):
+    """Toggling a soft-deleted todo should return 404."""
+    register_and_login(client)
+    add_todo(client, "Delete then toggle")
+
+    with app.app_context():
+        db = get_db()
+        todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
+
+    csrf = get_csrf(client)
+    client.post(f"/delete/{todo_id}", data={"csrf_token": csrf})
+
+    response = client.post(f"/toggle/{todo_id}", data={"csrf_token": csrf})
+    assert response.status_code == 404
+
+
+def test_user_cannot_restore_other_users_todo(client, app):
+    """User B should not be able to restore User A's deleted todo."""
+    register_and_login(client, username="alice")
+    add_todo(client, "Alice's todo")
+
+    with app.app_context():
+        db = get_db()
+        todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
+
+    csrf = get_csrf(client)
+    client.post(f"/delete/{todo_id}", data={"csrf_token": csrf})
+
+    client.post("/auth/logout", data={"csrf_token": csrf})
+    register_and_login(client, username="bob")
+
+    csrf = get_csrf(client)
+    response = client.post(f"/restore/{todo_id}", data={"csrf_token": csrf})
+    assert response.status_code == 404
+
+    # Verify it's still soft-deleted
+    with app.app_context():
+        db = get_db()
+        todo = db.execute("SELECT * FROM todos WHERE id = ?", (todo_id,)).fetchone()
+        assert todo["deleted_at"] is not None
+
+
+def test_soft_delete_preserves_tags(client, app):
+    """Soft delete should preserve tag associations for restore."""
+    register_and_login(client)
+    add_todo(client, "Tagged todo", tags="work, urgent")
+
+    with app.app_context():
+        db = get_db()
+        todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
+        tag_count_before = db.execute(
+            "SELECT COUNT(*) FROM todo_tags WHERE todo_id = ?", (todo_id,)
+        ).fetchone()[0]
+        assert tag_count_before == 2
+
+    csrf = get_csrf(client)
+    client.post(f"/delete/{todo_id}", data={"csrf_token": csrf})
+
+    with app.app_context():
+        db = get_db()
+        tag_count_after = db.execute(
+            "SELECT COUNT(*) FROM todo_tags WHERE todo_id = ?", (todo_id,)
+        ).fetchone()[0]
+        assert tag_count_after == tag_count_before
+
+    # Restore and verify tags are still there
+    client.post(f"/restore/{todo_id}", data={"csrf_token": csrf}, follow_redirects=True)
+
+    response = client.get("/")
+    assert b"work" in response.data
+    assert b"urgent" in response.data

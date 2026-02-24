@@ -111,7 +111,7 @@
     </div>
     <div class="todo-actions">
         <a href="{{ url_for('todos.edit', todo_id=todo['id']) }}" role="button" class="outline secondary">Edit</a>
-        <form method="post" action="{{ url_for('todos.delete', todo_id=todo['id']) }}" onsubmit="return confirm('Delete this todo?')">
+        <form method="post" action="{{ url_for('todos.delete', todo_id=todo['id']) }}" >
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <button type="submit" class="outline contrast">&#215;</button>
         </form>
@@ -148,7 +148,7 @@
             {% endif %}
         </div>
         <div class="todo-actions">
-            <form method="post" action="{{ url_for('todos.delete', todo_id=todo['id']) }}" onsubmit="return confirm('Delete this todo?')">
+            <form method="post" action="{{ url_for('todos.delete', todo_id=todo['id']) }}" >
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <button type="submit" class="outline contrast">&#215;</button>
             </form>
