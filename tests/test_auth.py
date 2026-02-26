@@ -1,8 +1,3 @@
-import pytest
-
-from app.db import get_db
-
-
 def extract_csrf(response):
     """Extract CSRF token from a response's HTML."""
     text = response.data.decode()
@@ -21,25 +16,34 @@ def get_csrf_token(client):
 def register(client, username="testuser", password="password123", confirm=None):
     """Helper to register a user with CSRF token."""
     csrf = get_csrf_token(client)
-    return client.post("/auth/register", data={
-        "csrf_token": csrf,
-        "username": username,
-        "password": password,
-        "confirm": confirm or password,
-    }, follow_redirects=True)
+    return client.post(
+        "/auth/register",
+        data={
+            "csrf_token": csrf,
+            "username": username,
+            "password": password,
+            "confirm": confirm or password,
+        },
+        follow_redirects=True,
+    )
 
 
 def login(client, username="testuser", password="password123"):
     """Helper to log in a user with CSRF token."""
     csrf = get_csrf_token(client)
-    return client.post("/auth/login", data={
-        "csrf_token": csrf,
-        "username": username,
-        "password": password,
-    }, follow_redirects=True)
+    return client.post(
+        "/auth/login",
+        data={
+            "csrf_token": csrf,
+            "username": username,
+            "password": password,
+        },
+        follow_redirects=True,
+    )
 
 
 # --- Registration tests ---
+
 
 def test_register_page_loads(client):
     response = client.get("/auth/register")
@@ -90,6 +94,7 @@ def test_register_password_mismatch(client):
 
 # --- Login tests ---
 
+
 def test_login_page_loads(client):
     response = client.get("/auth/login")
     assert response.status_code == 200
@@ -117,19 +122,25 @@ def test_login_nonexistent_user(client):
 
 # --- Logout tests ---
 
+
 def test_logout(client):
     register(client)
     login(client)
     # Get CSRF token from the session cookie
     with client.session_transaction() as sess:
         csrf = sess["csrf_token"]
-    response = client.post("/auth/logout", data={
-        "csrf_token": csrf,
-    }, follow_redirects=True)
+    response = client.post(
+        "/auth/logout",
+        data={
+            "csrf_token": csrf,
+        },
+        follow_redirects=True,
+    )
     assert b"logged out" in response.data
 
 
 # --- Access control tests ---
+
 
 def test_unauthenticated_redirect(client):
     response = client.get("/")
@@ -153,18 +164,25 @@ def test_authenticated_login_redirects(client):
 
 # --- CSRF tests ---
 
+
 def test_post_without_csrf_fails(client):
-    response = client.post("/auth/login", data={
-        "username": "test",
-        "password": "test",
-    })
+    response = client.post(
+        "/auth/login",
+        data={
+            "username": "test",
+            "password": "test",
+        },
+    )
     assert response.status_code == 400
 
 
 def test_post_with_wrong_csrf_fails(client):
-    response = client.post("/auth/login", data={
-        "csrf_token": "wrong-token",
-        "username": "test",
-        "password": "test",
-    })
+    response = client.post(
+        "/auth/login",
+        data={
+            "csrf_token": "wrong-token",
+            "username": "test",
+            "password": "test",
+        },
+    )
     assert response.status_code == 400

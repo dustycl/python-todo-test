@@ -1,5 +1,3 @@
-import pytest
-
 from app.db import get_db
 
 
@@ -16,19 +14,25 @@ def register_and_login(client, username="testuser", password="password123"):
     csrf = get_csrf(client)
 
     # Register
-    client.post("/auth/register", data={
-        "csrf_token": csrf,
-        "username": username,
-        "password": password,
-        "confirm": password,
-    })
+    client.post(
+        "/auth/register",
+        data={
+            "csrf_token": csrf,
+            "username": username,
+            "password": password,
+            "confirm": password,
+        },
+    )
 
     # Login
-    client.post("/auth/login", data={
-        "csrf_token": csrf,
-        "username": username,
-        "password": password,
-    })
+    client.post(
+        "/auth/login",
+        data={
+            "csrf_token": csrf,
+            "username": username,
+            "password": password,
+        },
+    )
 
     return csrf
 
@@ -49,6 +53,7 @@ def add_todo(client, title="Test todo", due_date=None, tags=None, description=No
 
 # --- List tests ---
 
+
 def test_list_empty(client):
     register_and_login(client)
     response = client.get("/")
@@ -67,13 +72,18 @@ def test_list_shows_todos(client):
 
 # --- Add tests ---
 
+
 def test_add_todo(client):
     register_and_login(client)
     csrf = get_csrf(client)
-    response = client.post("/add", data={
-        "csrf_token": csrf,
-        "title": "New todo",
-    }, follow_redirects=True)
+    response = client.post(
+        "/add",
+        data={
+            "csrf_token": csrf,
+            "title": "New todo",
+        },
+        follow_redirects=True,
+    )
     assert b"Todo added" in response.data
     assert b"New todo" in response.data
 
@@ -81,24 +91,33 @@ def test_add_todo(client):
 def test_add_empty_title(client):
     register_and_login(client)
     csrf = get_csrf(client)
-    response = client.post("/add", data={
-        "csrf_token": csrf,
-        "title": "   ",
-    }, follow_redirects=True)
+    response = client.post(
+        "/add",
+        data={
+            "csrf_token": csrf,
+            "title": "   ",
+        },
+        follow_redirects=True,
+    )
     assert b"Title is required" in response.data
 
 
 def test_add_long_title(client):
     register_and_login(client)
     csrf = get_csrf(client)
-    response = client.post("/add", data={
-        "csrf_token": csrf,
-        "title": "x" * 201,
-    }, follow_redirects=True)
+    response = client.post(
+        "/add",
+        data={
+            "csrf_token": csrf,
+            "title": "x" * 201,
+        },
+        follow_redirects=True,
+    )
     assert b"200 characters or less" in response.data
 
 
 # --- Toggle tests ---
+
 
 def test_toggle_complete(client, app):
     register_and_login(client)
@@ -149,6 +168,7 @@ def test_toggle_nonexistent(client):
 
 # --- Edit tests ---
 
+
 def test_edit_page_loads(client, app):
     register_and_login(client)
     add_todo(client, "Edit me")
@@ -171,10 +191,14 @@ def test_edit_updates_title(client, app):
         todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
 
     csrf = get_csrf(client)
-    response = client.post(f"/edit/{todo_id}", data={
-        "csrf_token": csrf,
-        "title": "New title",
-    }, follow_redirects=True)
+    response = client.post(
+        f"/edit/{todo_id}",
+        data={
+            "csrf_token": csrf,
+            "title": "New title",
+        },
+        follow_redirects=True,
+    )
     assert b"Todo updated" in response.data
     assert b"New title" in response.data
 
@@ -188,10 +212,14 @@ def test_edit_empty_title(client, app):
         todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
 
     csrf = get_csrf(client)
-    response = client.post(f"/edit/{todo_id}", data={
-        "csrf_token": csrf,
-        "title": "",
-    }, follow_redirects=True)
+    response = client.post(
+        f"/edit/{todo_id}",
+        data={
+            "csrf_token": csrf,
+            "title": "",
+        },
+        follow_redirects=True,
+    )
     assert b"Title is required" in response.data
 
 
@@ -203,6 +231,7 @@ def test_edit_nonexistent(client):
 
 # --- Delete tests ---
 
+
 def test_delete_todo(client, app):
     register_and_login(client)
     add_todo(client, "Delete me")
@@ -212,9 +241,13 @@ def test_delete_todo(client, app):
         todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
 
     csrf = get_csrf(client)
-    response = client.post(f"/delete/{todo_id}", data={
-        "csrf_token": csrf,
-    }, follow_redirects=True)
+    response = client.post(
+        f"/delete/{todo_id}",
+        data={
+            "csrf_token": csrf,
+        },
+        follow_redirects=True,
+    )
     assert b"Todo deleted" in response.data
     assert b"Undo" in response.data
 
@@ -239,6 +272,7 @@ def test_delete_nonexistent(client):
 
 
 # --- Cross-user isolation tests ---
+
 
 def test_user_cannot_see_other_users_todos(client, app):
     """User B should not see User A's todos."""
@@ -316,6 +350,7 @@ def test_user_cannot_delete_other_users_todo(client, app):
 
 # --- Due date tests ---
 
+
 def test_add_todo_with_due_date(client, app):
     register_and_login(client)
     add_todo(client, "Dated todo", due_date="2026-03-15")
@@ -339,11 +374,15 @@ def test_add_todo_without_due_date(client, app):
 def test_add_todo_invalid_due_date(client):
     register_and_login(client)
     csrf = get_csrf(client)
-    response = client.post("/add", data={
-        "csrf_token": csrf,
-        "title": "Bad date",
-        "due_date": "not-a-date",
-    }, follow_redirects=True)
+    response = client.post(
+        "/add",
+        data={
+            "csrf_token": csrf,
+            "title": "Bad date",
+            "due_date": "not-a-date",
+        },
+        follow_redirects=True,
+    )
     assert b"Invalid due date" in response.data
 
 
@@ -356,11 +395,15 @@ def test_edit_due_date(client, app):
         todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
 
     csrf = get_csrf(client)
-    client.post(f"/edit/{todo_id}", data={
-        "csrf_token": csrf,
-        "title": "Change my date",
-        "due_date": "2026-04-01",
-    }, follow_redirects=True)
+    client.post(
+        f"/edit/{todo_id}",
+        data={
+            "csrf_token": csrf,
+            "title": "Change my date",
+            "due_date": "2026-04-01",
+        },
+        follow_redirects=True,
+    )
 
     with app.app_context():
         db = get_db()
@@ -377,11 +420,15 @@ def test_edit_clear_due_date(client, app):
         todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
 
     csrf = get_csrf(client)
-    client.post(f"/edit/{todo_id}", data={
-        "csrf_token": csrf,
-        "title": "Clear my date",
-        "due_date": "",
-    }, follow_redirects=True)
+    client.post(
+        f"/edit/{todo_id}",
+        data={
+            "csrf_token": csrf,
+            "title": "Clear my date",
+            "due_date": "",
+        },
+        follow_redirects=True,
+    )
 
     with app.app_context():
         db = get_db()
@@ -402,6 +449,7 @@ def test_list_sorts_by_due_date(client, app):
 
 
 # --- Search tests ---
+
 
 def test_search_by_keyword(client):
     """Search should return only todos matching the keyword."""
@@ -449,6 +497,7 @@ def test_search_no_results(client):
 
 # --- Status filter tests ---
 
+
 def test_filter_status_active(client, app):
     """Status=active should show only incomplete todos."""
     register_and_login(client)
@@ -491,6 +540,7 @@ def test_filter_status_completed(client, app):
 
 # --- Due date filter tests ---
 
+
 def test_filter_due_overdue(client):
     """Due=overdue should show only todos with past due dates."""
     register_and_login(client)
@@ -508,6 +558,7 @@ def test_filter_due_overdue(client):
 def test_filter_due_today(client):
     """Due=today should show only todos due today."""
     from datetime import date
+
     register_and_login(client)
     today_str = date.today().isoformat()
     add_todo(client, "Today task", due_date=today_str)
@@ -522,6 +573,7 @@ def test_filter_due_today(client):
 def test_filter_due_week(client):
     """Due=week should show todos due within the next 7 days."""
     from datetime import date, timedelta
+
     register_and_login(client)
     today = date.today()
     add_todo(client, "This week task", due_date=(today + timedelta(days=3)).isoformat())
@@ -549,6 +601,7 @@ def test_filter_due_none(client):
 
 # --- Combined filter tests ---
 
+
 def test_combined_search_and_status(client, app):
     """Search and status filter should work together."""
     register_and_login(client)
@@ -557,7 +610,9 @@ def test_combined_search_and_status(client, app):
 
     with app.app_context():
         db = get_db()
-        todo = db.execute("SELECT id FROM todos WHERE title = 'Buy groceries'").fetchone()
+        todo = db.execute(
+            "SELECT id FROM todos WHERE title = 'Buy groceries'"
+        ).fetchone()
         todo_id = todo["id"]
 
     csrf = get_csrf(client)
@@ -595,6 +650,7 @@ def test_search_respects_user_isolation(client):
 
 
 # --- Tag tests ---
+
 
 def test_add_todo_with_tags(client, app):
     """Adding a todo with tags should store them."""
@@ -645,11 +701,15 @@ def test_edit_tags(client, app):
         todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
 
     csrf = get_csrf(client)
-    client.post(f"/edit/{todo_id}", data={
-        "csrf_token": csrf,
-        "title": "Change tags",
-        "tags": "new, updated",
-    }, follow_redirects=True)
+    client.post(
+        f"/edit/{todo_id}",
+        data={
+            "csrf_token": csrf,
+            "title": "Change tags",
+            "tags": "new, updated",
+        },
+        follow_redirects=True,
+    )
 
     with app.app_context():
         db = get_db()
@@ -671,11 +731,15 @@ def test_edit_clear_tags(client, app):
         todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
 
     csrf = get_csrf(client)
-    client.post(f"/edit/{todo_id}", data={
-        "csrf_token": csrf,
-        "title": "Remove tags",
-        "tags": "",
-    }, follow_redirects=True)
+    client.post(
+        f"/edit/{todo_id}",
+        data={
+            "csrf_token": csrf,
+            "title": "Remove tags",
+            "tags": "",
+        },
+        follow_redirects=True,
+    )
 
     with app.app_context():
         db = get_db()
@@ -795,11 +859,15 @@ def test_add_todo_without_description(client, app):
 def test_add_todo_long_description(client):
     """A description over 2000 characters is rejected."""
     register_and_login(client)
-    response = client.post("/add", data={
-        "csrf_token": get_csrf(client),
-        "title": "Long desc",
-        "description": "x" * 2001,
-    }, follow_redirects=True)
+    response = client.post(
+        "/add",
+        data={
+            "csrf_token": get_csrf(client),
+            "title": "Long desc",
+            "description": "x" * 2001,
+        },
+        follow_redirects=True,
+    )
     assert b"2000 characters or less" in response.data
 
 
@@ -813,11 +881,15 @@ def test_edit_description(client, app):
         todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
 
     csrf = get_csrf(client)
-    client.post(f"/edit/{todo_id}", data={
-        "csrf_token": csrf,
-        "title": "Edit desc",
-        "description": "Updated",
-    }, follow_redirects=True)
+    client.post(
+        f"/edit/{todo_id}",
+        data={
+            "csrf_token": csrf,
+            "title": "Edit desc",
+            "description": "Updated",
+        },
+        follow_redirects=True,
+    )
 
     with app.app_context():
         db = get_db()
@@ -835,11 +907,15 @@ def test_edit_clear_description(client, app):
         todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
 
     csrf = get_csrf(client)
-    client.post(f"/edit/{todo_id}", data={
-        "csrf_token": csrf,
-        "title": "Clear desc",
-        "description": "",
-    }, follow_redirects=True)
+    client.post(
+        f"/edit/{todo_id}",
+        data={
+            "csrf_token": csrf,
+            "title": "Clear desc",
+            "description": "",
+        },
+        follow_redirects=True,
+    )
 
     with app.app_context():
         db = get_db()
@@ -884,9 +960,13 @@ def test_restore_todo(client, app):
     csrf = get_csrf(client)
     client.post(f"/delete/{todo_id}", data={"csrf_token": csrf})
 
-    response = client.post(f"/restore/{todo_id}", data={
-        "csrf_token": csrf,
-    }, follow_redirects=True)
+    response = client.post(
+        f"/restore/{todo_id}",
+        data={
+            "csrf_token": csrf,
+        },
+        follow_redirects=True,
+    )
     assert b"Todo restored" in response.data
     assert b"Restore me" in response.data
 

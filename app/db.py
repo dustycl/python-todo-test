@@ -34,6 +34,7 @@ def close_db(e=None):
 # Migration system
 # ---------------------------------------------------------------------------
 
+
 def _get_migrations_dir():
     """Return the path to the migrations/ directory at the project root."""
     app_dir = os.path.dirname(os.path.abspath(__file__))
@@ -55,10 +56,7 @@ def _ensure_migrations_table(db):
 def _get_pending_migrations(db):
     """Return a sorted list of (version, filepath) for unapplied migrations."""
     applied = {
-        row[0]
-        for row in db.execute(
-            "SELECT version FROM schema_migrations"
-        ).fetchall()
+        row[0] for row in db.execute("SELECT version FROM schema_migrations").fetchall()
     }
 
     migrations_dir = _get_migrations_dir()
@@ -87,16 +85,13 @@ def _baseline_existing_db(db):
     record every known migration as already applied so that ALTER-style
     migrations are not re-run.
     """
-    has_rows = db.execute(
-        "SELECT COUNT(*) FROM schema_migrations"
-    ).fetchone()[0]
+    has_rows = db.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0]
     if has_rows:
         return
 
     # Check if application tables already exist
     has_tables = db.execute(
-        "SELECT COUNT(*) FROM sqlite_master "
-        "WHERE type='table' AND name='users'"
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='users'"
     ).fetchone()[0]
     if not has_tables:
         return  # Fresh database — nothing to baseline

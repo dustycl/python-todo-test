@@ -29,7 +29,9 @@ def init_login_manager(app):
     @login_manager.user_loader
     def load_user(user_id):
         db = get_db()
-        row = db.execute("SELECT id, username FROM users WHERE id = ?", (user_id,)).fetchone()
+        row = db.execute(
+            "SELECT id, username FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
         if row is None:
             return None
         return User(row["id"], row["username"])
@@ -98,7 +100,9 @@ def login():
                 (username,),
             ).fetchone()
         except Exception:
-            logger.error("Database error during login for username: %s", username, exc_info=True)
+            logger.error(
+                "Database error during login for username: %s", username, exc_info=True
+            )
             flash("An error occurred during login.", "error")
             return render_template("auth/login.html")
 

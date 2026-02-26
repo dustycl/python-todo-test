@@ -11,6 +11,8 @@ Ideas for future development of the todo app.
 - **Logging** — request tracking, auth events, and CRUD operations
 - **UI cleanup** — progressive disclosure and dedicated stylesheet
 - **Todo descriptions** — optional body text beyond just the title
+- **Undo delete** — soft deletes with floating toast notifications and progress bar
+- **Linting/formatting** — ruff for linting (E/F/W/I rules) and formatting
 
 ## Feature Additions
 
@@ -23,7 +25,6 @@ Ideas for future development of the todo app.
 
 - **Pagination** — currently loads all todos at once
 - **Drag-and-drop reordering** — custom sort order
-- **Undo delete** — soft deletes with a trash/restore flow
 - **Inline editing** — edit titles without navigating to a separate page
 
 ## Production Readiness
@@ -31,7 +32,6 @@ Ideas for future development of the todo app.
 - **Docker setup** — containerize for deployment
 - **CI/CD pipeline** — GitHub Actions for tests + linting
 - **Production WSGI server** — gunicorn config
-- **Linting/formatting** — black, flake8, or ruff
 
 ## API Layer
 

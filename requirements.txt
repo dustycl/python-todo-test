@@ -2,3 +2,4 @@ flask
 flask-login
 python-dotenv
 pytest
+ruff

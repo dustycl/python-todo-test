@@ -1,6 +1,6 @@
 import sqlite3
 
-from app.db import get_db, init_db
+from app.db import get_db
 
 
 def test_get_db_returns_same_connection(app):
@@ -35,7 +35,17 @@ def test_init_db_creates_tables(app):
         # Check todos table exists and has expected columns
         cursor = db.execute("PRAGMA table_info(todos)")
         columns = {row["name"] for row in cursor.fetchall()}
-        assert columns == {"id", "user_id", "title", "completed", "due_date", "description", "deleted_at", "created_at", "updated_at"}
+        assert columns == {
+            "id",
+            "user_id",
+            "title",
+            "completed",
+            "due_date",
+            "description",
+            "deleted_at",
+            "created_at",
+            "updated_at",
+        }
 
 
 def test_foreign_keys_enabled(app):

@@ -1,0 +1,13 @@
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["E501"]
+"run.py" = ["E402"]
+
+[tool.ruff.format]
+quote-style = "double"

@@ -4,7 +4,7 @@ import tempfile
 import pytest
 
 from app import create_app
-from app.db import get_db, init_db
+from app.db import init_db
 
 
 @pytest.fixture
@@ -12,11 +12,13 @@ def app():
     """Create an app instance with a temporary database for each test."""
     db_fd, db_path = tempfile.mkstemp()
 
-    app = create_app({
-        "TESTING": True,
-        "DATABASE": db_path,
-        "SECRET_KEY": "test-secret-key",
-    })
+    app = create_app(
+        {
+            "TESTING": True,
+            "DATABASE": db_path,
+            "SECRET_KEY": "test-secret-key",
+        }
+    )
 
     with app.app_context():
         init_db()

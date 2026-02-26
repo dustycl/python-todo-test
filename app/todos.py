@@ -10,7 +10,10 @@ logger = logging.getLogger(__name__)
 
 
 def _validate_due_date(raw):
-    """Validate and return a due_date string, or None if empty. Raises ValueError on bad format."""
+    """Validate and return a due_date string, or None if empty.
+
+    Raises ValueError on bad format.
+    """
     if not raw or not raw.strip():
         return None
     raw = raw.strip()
@@ -200,7 +203,8 @@ def add():
         try:
             db = get_db()
             cursor = db.execute(
-                "INSERT INTO todos (user_id, title, due_date, description) VALUES (?, ?, ?, ?)",
+                "INSERT INTO todos (user_id, title, due_date, description)"
+                " VALUES (?, ?, ?, ?)",
                 (current_user.id, title, due_date, description),
             )
             if tag_names:
@@ -209,7 +213,9 @@ def add():
             logger.info("Todo created by user %s: %r", current_user.id, title)
             flash("Todo added.", "success")
         except Exception:
-            logger.error("Failed to create todo for user %s", current_user.id, exc_info=True)
+            logger.error(
+                "Failed to create todo for user %s", current_user.id, exc_info=True
+            )
             flash("An error occurred while adding the todo.", "error")
 
     return redirect(url_for("todos.list_todos"))
@@ -222,18 +228,26 @@ def toggle(todo_id):
     try:
         db = get_db()
         result = db.execute(
-            "UPDATE todos SET completed = NOT completed, updated_at = CURRENT_TIMESTAMP "
-            "WHERE id = ? AND user_id = ? AND deleted_at IS NULL",
+            "UPDATE todos SET completed = NOT completed,"
+            " updated_at = CURRENT_TIMESTAMP"
+            " WHERE id = ? AND user_id = ? AND deleted_at IS NULL",
             (todo_id, current_user.id),
         )
         db.commit()
     except Exception:
-        logger.error("Failed to toggle todo %s for user %s", todo_id, current_user.id, exc_info=True)
+        logger.error(
+            "Failed to toggle todo %s for user %s",
+            todo_id,
+            current_user.id,
+            exc_info=True,
+        )
         flash("An error occurred while toggling the todo.", "error")
         return redirect(url_for("todos.list_todos"))
 
     if result.rowcount == 0:
-        logger.warning("Toggle failed: todo %s not found for user %s", todo_id, current_user.id)
+        logger.warning(
+            "Toggle failed: todo %s not found for user %s", todo_id, current_user.id
+        )
         abort(404)
 
     logger.info("Todo %s toggled by user %s", todo_id, current_user.id)
@@ -251,7 +265,9 @@ def edit(todo_id):
     ).fetchone()
 
     if todo is None:
-        logger.warning("Edit failed: todo %s not found for user %s", todo_id, current_user.id)
+        logger.warning(
+            "Edit failed: todo %s not found for user %s", todo_id, current_user.id
+        )
         abort(404)
 
     if request.method == "POST":
@@ -270,30 +286,43 @@ def edit(todo_id):
                 due_date = _validate_due_date(raw_due_date)
             except ValueError:
                 flash("Invalid due date format. Use YYYY-MM-DD.", "error")
-                return render_template("todos/edit.html", todo=todo,
-                                       todo_tags=_get_todo_tags(db, todo_id),
-                                       all_tags=_get_user_tags(db, current_user.id))
+                return render_template(
+                    "todos/edit.html",
+                    todo=todo,
+                    todo_tags=_get_todo_tags(db, todo_id),
+                    all_tags=_get_user_tags(db, current_user.id),
+                )
 
             tag_names = _parse_tags(request.form.get("tags", ""))
 
             try:
                 db.execute(
-                    "UPDATE todos SET title = ?, due_date = ?, description = ?, updated_at = CURRENT_TIMESTAMP "
-                    "WHERE id = ? AND user_id = ? AND deleted_at IS NULL",
+                    "UPDATE todos SET title = ?, due_date = ?,"
+                    " description = ?, updated_at = CURRENT_TIMESTAMP"
+                    " WHERE id = ? AND user_id = ? AND deleted_at IS NULL",
                     (title, due_date, description, todo_id, current_user.id),
                 )
                 _sync_tags(db, current_user.id, todo_id, tag_names)
                 db.commit()
-                logger.info("Todo %s edited by user %s: %r", todo_id, current_user.id, title)
+                logger.info(
+                    "Todo %s edited by user %s: %r", todo_id, current_user.id, title
+                )
                 flash("Todo updated.", "success")
                 return redirect(url_for("todos.list_todos"))
             except Exception:
-                logger.error("Failed to edit todo %s for user %s", todo_id, current_user.id, exc_info=True)
+                logger.error(
+                    "Failed to edit todo %s for user %s",
+                    todo_id,
+                    current_user.id,
+                    exc_info=True,
+                )
                 flash("An error occurred while updating the todo.", "error")
 
     todo_tags = _get_todo_tags(db, todo_id)
     all_tags = _get_user_tags(db, current_user.id)
-    return render_template("todos/edit.html", todo=todo, todo_tags=todo_tags, all_tags=all_tags)
+    return render_template(
+        "todos/edit.html", todo=todo, todo_tags=todo_tags, all_tags=all_tags
+    )
 
 
 @bp.route("/delete/<int:todo_id>", methods=["POST"])
@@ -309,18 +338,26 @@ def delete(todo_id):
         )
         db.commit()
     except Exception:
-        logger.error("Failed to delete todo %s for user %s", todo_id, current_user.id, exc_info=True)
+        logger.error(
+            "Failed to delete todo %s for user %s",
+            todo_id,
+            current_user.id,
+            exc_info=True,
+        )
         flash("An error occurred while deleting the todo.", "error")
         return redirect(url_for("todos.list_todos"))
 
     if result.rowcount == 0:
-        logger.warning("Delete failed: todo %s not found for user %s", todo_id, current_user.id)
+        logger.warning(
+            "Delete failed: todo %s not found for user %s", todo_id, current_user.id
+        )
         abort(404)
 
     logger.info("Todo %s soft-deleted by user %s", todo_id, current_user.id)
     undo_url = url_for("todos.restore", todo_id=todo_id)
     flash(
-        f'Todo deleted. <a href="#" class="undo-link" data-restore-url="{undo_url}">Undo</a>',
+        f'Todo deleted. <a href="#" class="undo-link"'
+        f' data-restore-url="{undo_url}">Undo</a>',
         "success",
     )
     return redirect(url_for("todos.list_todos"))
@@ -339,12 +376,21 @@ def restore(todo_id):
         )
         db.commit()
     except Exception:
-        logger.error("Failed to restore todo %s for user %s", todo_id, current_user.id, exc_info=True)
+        logger.error(
+            "Failed to restore todo %s for user %s",
+            todo_id,
+            current_user.id,
+            exc_info=True,
+        )
         flash("An error occurred while restoring the todo.", "error")
         return redirect(url_for("todos.list_todos"))
 
     if result.rowcount == 0:
-        logger.warning("Restore failed: todo %s not found or not deleted for user %s", todo_id, current_user.id)
+        logger.warning(
+            "Restore failed: todo %s not found or not deleted for user %s",
+            todo_id,
+            current_user.id,
+        )
         abort(404)
 
     logger.info("Todo %s restored by user %s", todo_id, current_user.id)

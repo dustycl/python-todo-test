@@ -7,7 +7,8 @@ from logging.handlers import RotatingFileHandler
 from flask import Flask, g, render_template, request, session
 
 from . import db
-from .auth import bp as auth_bp, init_login_manager
+from .auth import bp as auth_bp
+from .auth import init_login_manager
 from .todos import bp as todos_bp
 
 
@@ -31,9 +32,7 @@ def create_app(test_config=None):
     os.makedirs(app.instance_path, exist_ok=True)
 
     # Configure logging
-    formatter = logging.Formatter(
-        "%(asctime)s %(levelname)s %(name)s: %(message)s"
-    )
+    formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
     if not app.debug and not app.testing:
         file_handler = RotatingFileHandler(
             os.path.join(app.instance_path, "app.log"),
@@ -71,6 +70,7 @@ def create_app(test_config=None):
                     "CSRF validation failed: %s %s", request.method, request.path
                 )
                 from flask import abort
+
                 abort(400, "CSRF token missing or invalid.")
 
     @app.after_request
@@ -94,7 +94,9 @@ def create_app(test_config=None):
     @app.errorhandler(500)
     def server_error(e):
         app.logger.error(
-            "500 Internal Server Error: %s %s", request.method, request.path,
+            "500 Internal Server Error: %s %s",
+            request.method,
+            request.path,
             exc_info=e,
         )
         return render_template("500.html"), 500
