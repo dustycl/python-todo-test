@@ -15,6 +15,7 @@ Ideas for future development of the todo app.
 - **Linting/formatting** — ruff for linting (E/F/W/I rules) and formatting
 - **Docker setup** — Dockerfile and docker-compose.yml for containerized deployment
 - **Production WSGI server** — gunicorn as the container entrypoint
+- **CI/CD pipeline** — GitHub Actions for tests + linting with coverage reporting
 
 ## Feature Additions
 
@@ -30,8 +31,6 @@ Ideas for future development of the todo app.
 - **Inline editing** — edit titles without navigating to a separate page
 
 ## Production Readiness
-
-- **CI/CD pipeline** — GitHub Actions for tests + linting
 
 ## API Layer
 
