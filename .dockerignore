@@ -1,0 +1,14 @@
+.git
+__pycache__
+*.pyc
+*.pyo
+instance/
+tests/
+.env
+.venv
+*.md
+.pytest_cache
+.ruff_cache
+pyproject.toml
+.gitignore
+.dockerignore

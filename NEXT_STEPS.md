@@ -13,6 +13,8 @@ Ideas for future development of the todo app.
 - **Todo descriptions** — optional body text beyond just the title
 - **Undo delete** — soft deletes with floating toast notifications and progress bar
 - **Linting/formatting** — ruff for linting (E/F/W/I rules) and formatting
+- **Docker setup** — Dockerfile and docker-compose.yml for containerized deployment
+- **Production WSGI server** — gunicorn as the container entrypoint
 
 ## Feature Additions
 
@@ -29,9 +31,7 @@ Ideas for future development of the todo app.
 
 ## Production Readiness
 
-- **Docker setup** — containerize for deployment
 - **CI/CD pipeline** — GitHub Actions for tests + linting
-- **Production WSGI server** — gunicorn config
 
 ## API Layer
 
