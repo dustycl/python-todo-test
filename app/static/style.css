@@ -1,7 +1,8 @@
 /* === Layout & Spacing === */
 
 .todo-page h2 {
-    margin-bottom: 1.25rem;
+    margin: 0;
+    white-space: nowrap;
 }
 
 .section-gap {
@@ -18,34 +19,44 @@
 
 .search-row input[type="search"] {
     margin: 0;
-    flex: 1;
-    min-width: 10rem;
+    flex: 0 1 14rem;
+    min-width: 8rem;
+    font-size: 0.875rem;
+    padding-top: 0.35rem;
+    padding-bottom: 0.35rem;
+    height: auto;
 }
 
 .filter-toggle {
+    width: 2rem;
+    height: 2rem;
+    min-width: 2rem;
+    border-radius: 50%;
+    border: 1px solid var(--pico-muted-border-color);
     background: none;
-    border: none;
     color: var(--pico-secondary);
-    font-size: 0.85rem;
     cursor: pointer;
-    padding: 0.35rem 0.5rem;
+    padding: 0;
     margin: 0;
-    white-space: nowrap;
-    width: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
 }
 
 .filter-toggle:hover {
     color: var(--pico-primary);
+    border-color: var(--pico-primary);
 }
 
 .filter-active-dot {
-    display: inline-block;
+    position: absolute;
+    top: 0.2rem;
+    right: 0.2rem;
     width: 0.5rem;
     height: 0.5rem;
     background: var(--pico-primary);
     border-radius: 50%;
-    margin-left: 0.25rem;
-    vertical-align: middle;
 }
 
 .filter-panel {
@@ -148,12 +159,34 @@
     margin: 0;
 }
 
-.todo-toggle button {
-    margin: 0;
-    padding: 0.2rem 0.45rem;
-    width: auto;
-    font-size: 1.1rem;
+.todo-checkbox {
+    appearance: none;
+    width: 1.25rem;
+    height: 1.25rem;
+    min-width: 1.25rem;
+    border: 2px solid var(--pico-muted-border-color);
+    border-radius: 0.25rem;
+    background: none;
+    cursor: pointer;
+    padding: 0;
+    margin: 0.15rem 0 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
     line-height: 1;
+    color: transparent;
+    transition: border-color 0.15s, background-color 0.15s, color 0.15s;
+}
+
+.todo-checkbox:hover {
+    border-color: var(--pico-primary);
+}
+
+.todo-checkbox.checked {
+    background-color: var(--pico-primary);
+    border-color: var(--pico-primary);
+    color: #fff;
 }
 
 .todo-content {
