@@ -1,6 +1,7 @@
 flask
 flask-login
 gunicorn
+psycopg2-binary
 python-dotenv
 pytest
 pytest-cov

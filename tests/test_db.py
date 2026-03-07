@@ -1,4 +1,4 @@
-import sqlite3
+import psycopg2
 
 from app.db import get_db
 
@@ -17,9 +17,10 @@ def test_connection_closes_after_context(app):
 
     # After context closes, the connection should be unusable
     try:
-        db.execute("SELECT 1")
-        assert False, "Expected ProgrammingError"
-    except sqlite3.ProgrammingError:
+        cur = db.cursor()
+        cur.execute("SELECT 1")
+        assert False, "Expected InterfaceError"
+    except psycopg2.InterfaceError:
         pass
 
 
@@ -27,14 +28,22 @@ def test_init_db_creates_tables(app):
     """init_db should create the users and todos tables."""
     with app.app_context():
         db = get_db()
+        cur = db.cursor()
+
         # Check users table exists and has expected columns
-        cursor = db.execute("PRAGMA table_info(users)")
-        columns = {row["name"] for row in cursor.fetchall()}
+        cur.execute(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_schema = 'public' AND table_name = 'users'"
+        )
+        columns = {row["column_name"] for row in cur.fetchall()}
         assert columns == {"id", "username", "password_hash", "created_at"}
 
         # Check todos table exists and has expected columns
-        cursor = db.execute("PRAGMA table_info(todos)")
-        columns = {row["name"] for row in cursor.fetchall()}
+        cur.execute(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_schema = 'public' AND table_name = 'todos'"
+        )
+        columns = {row["column_name"] for row in cur.fetchall()}
         assert columns == {
             "id",
             "user_id",
@@ -48,22 +57,32 @@ def test_init_db_creates_tables(app):
         }
 
 
-def test_foreign_keys_enabled(app):
-    """Foreign key enforcement should be active."""
+def test_foreign_keys_enforced(app):
+    """Foreign key constraints should be enforced in PostgreSQL."""
     with app.app_context():
         db = get_db()
-        result = db.execute("PRAGMA foreign_keys").fetchone()
-        assert result[0] == 1
+        cur = db.cursor()
+        try:
+            cur.execute(
+                "INSERT INTO todos (user_id, title) VALUES (%s, %s)",
+                (9999, "orphan todo"),
+            )
+            db.commit()
+            assert False, "Expected IntegrityError"
+        except psycopg2.IntegrityError:
+            db.rollback()
 
 
 def test_todos_user_id_index_exists(app):
     """The idx_todos_user_id index should be created."""
     with app.app_context():
         db = get_db()
-        cursor = db.execute(
-            "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_todos_user_id'"
+        cur = db.cursor()
+        cur.execute(
+            "SELECT indexname FROM pg_indexes "
+            "WHERE schemaname = 'public' AND indexname = 'idx_todos_user_id'"
         )
-        assert cursor.fetchone() is not None
+        assert cur.fetchone() is not None
 
 
 def test_init_db_command(runner):
@@ -76,33 +95,35 @@ def test_users_table_unique_username(app):
     """The username column should enforce uniqueness."""
     with app.app_context():
         db = get_db()
-        db.execute(
-            "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+        cur = db.cursor()
+        cur.execute(
+            "INSERT INTO users (username, password_hash) VALUES (%s, %s)",
             ("alice", "hash1"),
         )
         db.commit()
 
         try:
-            db.execute(
-                "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+            cur.execute(
+                "INSERT INTO users (username, password_hash) VALUES (%s, %s)",
                 ("alice", "hash2"),
             )
             db.commit()
             assert False, "Expected IntegrityError"
-        except sqlite3.IntegrityError:
-            pass
+        except psycopg2.IntegrityError:
+            db.rollback()
 
 
 def test_todos_foreign_key_constraint(app):
     """Inserting a todo with a nonexistent user_id should fail."""
     with app.app_context():
         db = get_db()
+        cur = db.cursor()
         try:
-            db.execute(
-                "INSERT INTO todos (user_id, title) VALUES (?, ?)",
+            cur.execute(
+                "INSERT INTO todos (user_id, title) VALUES (%s, %s)",
                 (9999, "orphan todo"),
             )
             db.commit()
             assert False, "Expected IntegrityError"
-        except sqlite3.IntegrityError:
-            pass
+        except psycopg2.IntegrityError:
+            db.rollback()

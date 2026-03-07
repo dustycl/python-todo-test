@@ -1,3 +1,5 @@
+from datetime import date
+
 from app.db import get_db
 
 
@@ -49,6 +51,20 @@ def add_todo(client, title="Test todo", due_date=None, tags=None, description=No
         data["description"] = description
     client.post("/add", data=data, follow_redirects=True)
     return csrf
+
+
+def _fetchone(db, sql, params=None):
+    """Execute a query and return one row."""
+    cur = db.cursor()
+    cur.execute(sql, params or ())
+    return cur.fetchone()
+
+
+def _fetchall(db, sql, params=None):
+    """Execute a query and return all rows."""
+    cur = db.cursor()
+    cur.execute(sql, params or ())
+    return cur.fetchall()
 
 
 # --- List tests ---
@@ -125,8 +141,8 @@ def test_toggle_complete(client, app):
 
     with app.app_context():
         db = get_db()
-        todo = db.execute("SELECT * FROM todos").fetchone()
-        assert todo["completed"] == 0
+        todo = _fetchone(db, "SELECT * FROM todos")
+        assert todo["completed"] is False
         todo_id = todo["id"]
 
     csrf = get_csrf(client)
@@ -134,8 +150,8 @@ def test_toggle_complete(client, app):
 
     with app.app_context():
         db = get_db()
-        todo = db.execute("SELECT * FROM todos WHERE id = ?", (todo_id,)).fetchone()
-        assert todo["completed"] == 1
+        todo = _fetchone(db, "SELECT * FROM todos WHERE id = %s", (todo_id,))
+        assert todo["completed"] is True
 
 
 def test_toggle_uncomplete(client, app):
@@ -144,7 +160,7 @@ def test_toggle_uncomplete(client, app):
 
     with app.app_context():
         db = get_db()
-        todo = db.execute("SELECT * FROM todos").fetchone()
+        todo = _fetchone(db, "SELECT * FROM todos")
         todo_id = todo["id"]
 
     csrf = get_csrf(client)
@@ -155,8 +171,8 @@ def test_toggle_uncomplete(client, app):
 
     with app.app_context():
         db = get_db()
-        todo = db.execute("SELECT * FROM todos WHERE id = ?", (todo_id,)).fetchone()
-        assert todo["completed"] == 0
+        todo = _fetchone(db, "SELECT * FROM todos WHERE id = %s", (todo_id,))
+        assert todo["completed"] is False
 
 
 def test_toggle_nonexistent(client):
@@ -175,7 +191,7 @@ def test_edit_page_loads(client, app):
 
     with app.app_context():
         db = get_db()
-        todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
+        todo_id = _fetchone(db, "SELECT id FROM todos")["id"]
 
     response = client.get(f"/edit/{todo_id}")
     assert response.status_code == 200
@@ -188,7 +204,7 @@ def test_edit_updates_title(client, app):
 
     with app.app_context():
         db = get_db()
-        todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
+        todo_id = _fetchone(db, "SELECT id FROM todos")["id"]
 
     csrf = get_csrf(client)
     response = client.post(
@@ -209,7 +225,7 @@ def test_edit_empty_title(client, app):
 
     with app.app_context():
         db = get_db()
-        todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
+        todo_id = _fetchone(db, "SELECT id FROM todos")["id"]
 
     csrf = get_csrf(client)
     response = client.post(
@@ -238,7 +254,7 @@ def test_delete_todo(client, app):
 
     with app.app_context():
         db = get_db()
-        todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
+        todo_id = _fetchone(db, "SELECT id FROM todos")["id"]
 
     csrf = get_csrf(client)
     response = client.post(
@@ -254,13 +270,13 @@ def test_delete_todo(client, app):
     with app.app_context():
         db = get_db()
         # Row still exists but is soft-deleted
-        todo = db.execute("SELECT * FROM todos WHERE id = ?", (todo_id,)).fetchone()
+        todo = _fetchone(db, "SELECT * FROM todos WHERE id = %s", (todo_id,))
         assert todo is not None
         assert todo["deleted_at"] is not None
         # Not visible in normal queries
-        count = db.execute(
-            "SELECT COUNT(*) FROM todos WHERE deleted_at IS NULL"
-        ).fetchone()[0]
+        count = _fetchone(
+            db, "SELECT COUNT(*) AS cnt FROM todos WHERE deleted_at IS NULL"
+        )["cnt"]
         assert count == 0
 
 
@@ -296,7 +312,7 @@ def test_user_cannot_toggle_other_users_todo(client, app):
 
     with app.app_context():
         db = get_db()
-        todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
+        todo_id = _fetchone(db, "SELECT id FROM todos")["id"]
 
     csrf = get_csrf(client)
     client.post("/auth/logout", data={"csrf_token": csrf})
@@ -314,7 +330,7 @@ def test_user_cannot_edit_other_users_todo(client, app):
 
     with app.app_context():
         db = get_db()
-        todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
+        todo_id = _fetchone(db, "SELECT id FROM todos")["id"]
 
     csrf = get_csrf(client)
     client.post("/auth/logout", data={"csrf_token": csrf})
@@ -331,7 +347,7 @@ def test_user_cannot_delete_other_users_todo(client, app):
 
     with app.app_context():
         db = get_db()
-        todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
+        todo_id = _fetchone(db, "SELECT id FROM todos")["id"]
 
     csrf = get_csrf(client)
     client.post("/auth/logout", data={"csrf_token": csrf})
@@ -344,7 +360,7 @@ def test_user_cannot_delete_other_users_todo(client, app):
     # Verify Alice's todo is still there
     with app.app_context():
         db = get_db()
-        count = db.execute("SELECT COUNT(*) FROM todos").fetchone()[0]
+        count = _fetchone(db, "SELECT COUNT(*) AS cnt FROM todos")["cnt"]
         assert count == 1
 
 
@@ -357,8 +373,8 @@ def test_add_todo_with_due_date(client, app):
 
     with app.app_context():
         db = get_db()
-        todo = db.execute("SELECT * FROM todos").fetchone()
-        assert todo["due_date"] == "2026-03-15"
+        todo = _fetchone(db, "SELECT * FROM todos")
+        assert todo["due_date"] == date(2026, 3, 15)
 
 
 def test_add_todo_without_due_date(client, app):
@@ -367,7 +383,7 @@ def test_add_todo_without_due_date(client, app):
 
     with app.app_context():
         db = get_db()
-        todo = db.execute("SELECT * FROM todos").fetchone()
+        todo = _fetchone(db, "SELECT * FROM todos")
         assert todo["due_date"] is None
 
 
@@ -392,7 +408,7 @@ def test_edit_due_date(client, app):
 
     with app.app_context():
         db = get_db()
-        todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
+        todo_id = _fetchone(db, "SELECT id FROM todos")["id"]
 
     csrf = get_csrf(client)
     client.post(
@@ -407,8 +423,8 @@ def test_edit_due_date(client, app):
 
     with app.app_context():
         db = get_db()
-        todo = db.execute("SELECT * FROM todos WHERE id = ?", (todo_id,)).fetchone()
-        assert todo["due_date"] == "2026-04-01"
+        todo = _fetchone(db, "SELECT * FROM todos WHERE id = %s", (todo_id,))
+        assert todo["due_date"] == date(2026, 4, 1)
 
 
 def test_edit_clear_due_date(client, app):
@@ -417,7 +433,7 @@ def test_edit_clear_due_date(client, app):
 
     with app.app_context():
         db = get_db()
-        todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
+        todo_id = _fetchone(db, "SELECT id FROM todos")["id"]
 
     csrf = get_csrf(client)
     client.post(
@@ -432,7 +448,7 @@ def test_edit_clear_due_date(client, app):
 
     with app.app_context():
         db = get_db()
-        todo = db.execute("SELECT * FROM todos WHERE id = ?", (todo_id,)).fetchone()
+        todo = _fetchone(db, "SELECT * FROM todos WHERE id = %s", (todo_id,))
         assert todo["due_date"] is None
 
 
@@ -506,7 +522,7 @@ def test_filter_status_active(client, app):
 
     with app.app_context():
         db = get_db()
-        todo = db.execute("SELECT id FROM todos WHERE title = 'Done todo'").fetchone()
+        todo = _fetchone(db, "SELECT id FROM todos WHERE title = 'Done todo'")
         todo_id = todo["id"]
 
     csrf = get_csrf(client)
@@ -526,7 +542,7 @@ def test_filter_status_completed(client, app):
 
     with app.app_context():
         db = get_db()
-        todo = db.execute("SELECT id FROM todos WHERE title = 'Done todo'").fetchone()
+        todo = _fetchone(db, "SELECT id FROM todos WHERE title = 'Done todo'")
         todo_id = todo["id"]
 
     csrf = get_csrf(client)
@@ -557,8 +573,6 @@ def test_filter_due_overdue(client):
 
 def test_filter_due_today(client):
     """Due=today should show only todos due today."""
-    from datetime import date
-
     register_and_login(client)
     today_str = date.today().isoformat()
     add_todo(client, "Today task", due_date=today_str)
@@ -572,7 +586,7 @@ def test_filter_due_today(client):
 
 def test_filter_due_week(client):
     """Due=week should show todos due within the next 7 days."""
-    from datetime import date, timedelta
+    from datetime import timedelta
 
     register_and_login(client)
     today = date.today()
@@ -610,9 +624,7 @@ def test_combined_search_and_status(client, app):
 
     with app.app_context():
         db = get_db()
-        todo = db.execute(
-            "SELECT id FROM todos WHERE title = 'Buy groceries'"
-        ).fetchone()
+        todo = _fetchone(db, "SELECT id FROM todos WHERE title = 'Buy groceries'")
         todo_id = todo["id"]
 
     csrf = get_csrf(client)
@@ -659,12 +671,13 @@ def test_add_todo_with_tags(client, app):
 
     with app.app_context():
         db = get_db()
-        todo = db.execute("SELECT id FROM todos").fetchone()
-        tags = db.execute(
+        todo = _fetchone(db, "SELECT id FROM todos")
+        tags = _fetchall(
+            db,
             "SELECT t.name FROM tags t JOIN todo_tags tt ON t.id = tt.tag_id "
-            "WHERE tt.todo_id = ? ORDER BY t.name",
+            "WHERE tt.todo_id = %s ORDER BY t.name",
             (todo["id"],),
-        ).fetchall()
+        )
         assert [r["name"] for r in tags] == ["personal", "work"]
 
 
@@ -698,7 +711,7 @@ def test_edit_tags(client, app):
 
     with app.app_context():
         db = get_db()
-        todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
+        todo_id = _fetchone(db, "SELECT id FROM todos")["id"]
 
     csrf = get_csrf(client)
     client.post(
@@ -713,11 +726,12 @@ def test_edit_tags(client, app):
 
     with app.app_context():
         db = get_db()
-        tags = db.execute(
+        tags = _fetchall(
+            db,
             "SELECT t.name FROM tags t JOIN todo_tags tt ON t.id = tt.tag_id "
-            "WHERE tt.todo_id = ? ORDER BY t.name",
+            "WHERE tt.todo_id = %s ORDER BY t.name",
             (todo_id,),
-        ).fetchall()
+        )
         assert [r["name"] for r in tags] == ["new", "updated"]
 
 
@@ -728,7 +742,7 @@ def test_edit_clear_tags(client, app):
 
     with app.app_context():
         db = get_db()
-        todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
+        todo_id = _fetchone(db, "SELECT id FROM todos")["id"]
 
     csrf = get_csrf(client)
     client.post(
@@ -743,9 +757,11 @@ def test_edit_clear_tags(client, app):
 
     with app.app_context():
         db = get_db()
-        count = db.execute(
-            "SELECT COUNT(*) FROM todo_tags WHERE todo_id = ?", (todo_id,)
-        ).fetchone()[0]
+        count = _fetchone(
+            db,
+            "SELECT COUNT(*) AS cnt FROM todo_tags WHERE todo_id = %s",
+            (todo_id,),
+        )["cnt"]
         assert count == 0
 
 
@@ -756,16 +772,18 @@ def test_delete_todo_preserves_tags(client, app):
 
     with app.app_context():
         db = get_db()
-        todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
+        todo_id = _fetchone(db, "SELECT id FROM todos")["id"]
 
     csrf = get_csrf(client)
     client.post(f"/delete/{todo_id}", data={"csrf_token": csrf}, follow_redirects=True)
 
     with app.app_context():
         db = get_db()
-        count = db.execute(
-            "SELECT COUNT(*) FROM todo_tags WHERE todo_id = ?", (todo_id,)
-        ).fetchone()[0]
+        count = _fetchone(
+            db,
+            "SELECT COUNT(*) AS cnt FROM todo_tags WHERE todo_id = %s",
+            (todo_id,),
+        )["cnt"]
         assert count == 1
 
 
@@ -776,12 +794,13 @@ def test_duplicate_tags_deduplicated(client, app):
 
     with app.app_context():
         db = get_db()
-        todo = db.execute("SELECT id FROM todos").fetchone()
-        tags = db.execute(
+        todo = _fetchone(db, "SELECT id FROM todos")
+        tags = _fetchall(
+            db,
             "SELECT t.name FROM tags t JOIN todo_tags tt ON t.id = tt.tag_id "
-            "WHERE tt.todo_id = ?",
+            "WHERE tt.todo_id = %s",
             (todo["id"],),
-        ).fetchall()
+        )
         assert len(tags) == 1
         assert tags[0]["name"] == "work"
 
@@ -793,12 +812,13 @@ def test_empty_tags_ignored(client, app):
 
     with app.app_context():
         db = get_db()
-        todo = db.execute("SELECT id FROM todos").fetchone()
-        tags = db.execute(
+        todo = _fetchone(db, "SELECT id FROM todos")
+        tags = _fetchall(
+            db,
             "SELECT t.name FROM tags t JOIN todo_tags tt ON t.id = tt.tag_id "
-            "WHERE tt.todo_id = ?",
+            "WHERE tt.todo_id = %s",
             (todo["id"],),
-        ).fetchall()
+        )
         assert len(tags) == 1
         assert tags[0]["name"] == "valid"
 
@@ -823,7 +843,7 @@ def test_edit_page_shows_current_tags(client, app):
 
     with app.app_context():
         db = get_db()
-        todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
+        todo_id = _fetchone(db, "SELECT id FROM todos")["id"]
 
     response = client.get(f"/edit/{todo_id}")
     data = response.data.decode()
@@ -841,7 +861,7 @@ def test_add_todo_with_description(client, app):
 
     with app.app_context():
         db = get_db()
-        todo = db.execute("SELECT * FROM todos").fetchone()
+        todo = _fetchone(db, "SELECT * FROM todos")
         assert todo["description"] == "Some details here"
 
 
@@ -852,7 +872,7 @@ def test_add_todo_without_description(client, app):
 
     with app.app_context():
         db = get_db()
-        todo = db.execute("SELECT * FROM todos").fetchone()
+        todo = _fetchone(db, "SELECT * FROM todos")
         assert todo["description"] is None
 
 
@@ -878,7 +898,7 @@ def test_edit_description(client, app):
 
     with app.app_context():
         db = get_db()
-        todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
+        todo_id = _fetchone(db, "SELECT id FROM todos")["id"]
 
     csrf = get_csrf(client)
     client.post(
@@ -893,7 +913,7 @@ def test_edit_description(client, app):
 
     with app.app_context():
         db = get_db()
-        todo = db.execute("SELECT * FROM todos WHERE id = ?", (todo_id,)).fetchone()
+        todo = _fetchone(db, "SELECT * FROM todos WHERE id = %s", (todo_id,))
         assert todo["description"] == "Updated"
 
 
@@ -904,7 +924,7 @@ def test_edit_clear_description(client, app):
 
     with app.app_context():
         db = get_db()
-        todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
+        todo_id = _fetchone(db, "SELECT id FROM todos")["id"]
 
     csrf = get_csrf(client)
     client.post(
@@ -919,7 +939,7 @@ def test_edit_clear_description(client, app):
 
     with app.app_context():
         db = get_db()
-        todo = db.execute("SELECT * FROM todos WHERE id = ?", (todo_id,)).fetchone()
+        todo = _fetchone(db, "SELECT * FROM todos WHERE id = %s", (todo_id,))
         assert todo["description"] is None
 
 
@@ -939,7 +959,7 @@ def test_edit_page_shows_current_description(client, app):
 
     with app.app_context():
         db = get_db()
-        todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
+        todo_id = _fetchone(db, "SELECT id FROM todos")["id"]
 
     response = client.get(f"/edit/{todo_id}")
     assert b"Pre-filled text" in response.data
@@ -955,7 +975,7 @@ def test_restore_todo(client, app):
 
     with app.app_context():
         db = get_db()
-        todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
+        todo_id = _fetchone(db, "SELECT id FROM todos")["id"]
 
     csrf = get_csrf(client)
     client.post(f"/delete/{todo_id}", data={"csrf_token": csrf})
@@ -972,7 +992,7 @@ def test_restore_todo(client, app):
 
     with app.app_context():
         db = get_db()
-        todo = db.execute("SELECT * FROM todos WHERE id = ?", (todo_id,)).fetchone()
+        todo = _fetchone(db, "SELECT * FROM todos WHERE id = %s", (todo_id,))
         assert todo["deleted_at"] is None
 
 
@@ -991,7 +1011,7 @@ def test_restore_non_deleted_todo(client, app):
 
     with app.app_context():
         db = get_db()
-        todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
+        todo_id = _fetchone(db, "SELECT id FROM todos")["id"]
 
     csrf = get_csrf(client)
     response = client.post(f"/restore/{todo_id}", data={"csrf_token": csrf})
@@ -1006,9 +1026,9 @@ def test_deleted_todo_not_in_list(client, app):
 
     with app.app_context():
         db = get_db()
-        todo_id = db.execute(
-            "SELECT id FROM todos WHERE title = 'Deleted todo'"
-        ).fetchone()["id"]
+        todo_id = _fetchone(db, "SELECT id FROM todos WHERE title = 'Deleted todo'")[
+            "id"
+        ]
 
     csrf = get_csrf(client)
     client.post(f"/delete/{todo_id}", data={"csrf_token": csrf})
@@ -1025,7 +1045,7 @@ def test_cannot_edit_deleted_todo(client, app):
 
     with app.app_context():
         db = get_db()
-        todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
+        todo_id = _fetchone(db, "SELECT id FROM todos")["id"]
 
     csrf = get_csrf(client)
     client.post(f"/delete/{todo_id}", data={"csrf_token": csrf})
@@ -1041,7 +1061,7 @@ def test_cannot_toggle_deleted_todo(client, app):
 
     with app.app_context():
         db = get_db()
-        todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
+        todo_id = _fetchone(db, "SELECT id FROM todos")["id"]
 
     csrf = get_csrf(client)
     client.post(f"/delete/{todo_id}", data={"csrf_token": csrf})
@@ -1057,7 +1077,7 @@ def test_user_cannot_restore_other_users_todo(client, app):
 
     with app.app_context():
         db = get_db()
-        todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
+        todo_id = _fetchone(db, "SELECT id FROM todos")["id"]
 
     csrf = get_csrf(client)
     client.post(f"/delete/{todo_id}", data={"csrf_token": csrf})
@@ -1072,7 +1092,7 @@ def test_user_cannot_restore_other_users_todo(client, app):
     # Verify it's still soft-deleted
     with app.app_context():
         db = get_db()
-        todo = db.execute("SELECT * FROM todos WHERE id = ?", (todo_id,)).fetchone()
+        todo = _fetchone(db, "SELECT * FROM todos WHERE id = %s", (todo_id,))
         assert todo["deleted_at"] is not None
 
 
@@ -1083,10 +1103,12 @@ def test_soft_delete_preserves_tags(client, app):
 
     with app.app_context():
         db = get_db()
-        todo_id = db.execute("SELECT id FROM todos").fetchone()["id"]
-        tag_count_before = db.execute(
-            "SELECT COUNT(*) FROM todo_tags WHERE todo_id = ?", (todo_id,)
-        ).fetchone()[0]
+        todo_id = _fetchone(db, "SELECT id FROM todos")["id"]
+        tag_count_before = _fetchone(
+            db,
+            "SELECT COUNT(*) AS cnt FROM todo_tags WHERE todo_id = %s",
+            (todo_id,),
+        )["cnt"]
         assert tag_count_before == 2
 
     csrf = get_csrf(client)
@@ -1094,9 +1116,11 @@ def test_soft_delete_preserves_tags(client, app):
 
     with app.app_context():
         db = get_db()
-        tag_count_after = db.execute(
-            "SELECT COUNT(*) FROM todo_tags WHERE todo_id = ?", (todo_id,)
-        ).fetchone()[0]
+        tag_count_after = _fetchone(
+            db,
+            "SELECT COUNT(*) AS cnt FROM todo_tags WHERE todo_id = %s",
+            (todo_id,),
+        )["cnt"]
         assert tag_count_after == tag_count_before
 
     # Restore and verify tags are still there

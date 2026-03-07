@@ -38,58 +38,64 @@ def _parse_tags(raw):
 
 def _sync_tags(db, user_id, todo_id, tag_names):
     """Create any new tags and set the todo's tags to exactly tag_names."""
+    cur = db.cursor()
     # Remove existing associations
-    db.execute("DELETE FROM todo_tags WHERE todo_id = ?", (todo_id,))
+    cur.execute("DELETE FROM todo_tags WHERE todo_id = %s", (todo_id,))
 
     for name in tag_names:
         # Insert tag if it doesn't exist for this user
-        db.execute(
-            "INSERT OR IGNORE INTO tags (user_id, name) VALUES (?, ?)",
+        cur.execute(
+            "INSERT INTO tags (user_id, name) VALUES (%s, %s) "
+            "ON CONFLICT (user_id, name) DO NOTHING",
             (user_id, name),
         )
-        tag = db.execute(
-            "SELECT id FROM tags WHERE user_id = ? AND name = ?",
+        cur.execute(
+            "SELECT id FROM tags WHERE user_id = %s AND name = %s",
             (user_id, name),
-        ).fetchone()
-        db.execute(
-            "INSERT INTO todo_tags (todo_id, tag_id) VALUES (?, ?)",
+        )
+        tag = cur.fetchone()
+        cur.execute(
+            "INSERT INTO todo_tags (todo_id, tag_id) VALUES (%s, %s)",
             (todo_id, tag["id"]),
         )
 
 
 def _get_user_tags(db, user_id):
     """Return all tag names for a user, ordered alphabetically."""
-    rows = db.execute(
-        "SELECT DISTINCT name FROM tags WHERE user_id = ? ORDER BY name",
+    cur = db.cursor()
+    cur.execute(
+        "SELECT DISTINCT name FROM tags WHERE user_id = %s ORDER BY name",
         (user_id,),
-    ).fetchall()
-    return [row["name"] for row in rows]
+    )
+    return [row["name"] for row in cur.fetchall()]
 
 
 def _get_todo_tags(db, todo_id):
     """Return tag names for a specific todo."""
-    rows = db.execute(
+    cur = db.cursor()
+    cur.execute(
         "SELECT t.name FROM tags t "
         "JOIN todo_tags tt ON t.id = tt.tag_id "
-        "WHERE tt.todo_id = ? ORDER BY t.name",
+        "WHERE tt.todo_id = %s ORDER BY t.name",
         (todo_id,),
-    ).fetchall()
-    return [row["name"] for row in rows]
+    )
+    return [row["name"] for row in cur.fetchall()]
 
 
 def _get_tags_for_todos(db, todo_ids):
     """Return a dict mapping todo_id -> list of tag names."""
     if not todo_ids:
         return {}
-    placeholders = ",".join("?" * len(todo_ids))
-    rows = db.execute(
+    cur = db.cursor()
+    placeholders = ",".join("%s" for _ in todo_ids)
+    cur.execute(
         f"SELECT tt.todo_id, t.name FROM tags t "
         f"JOIN todo_tags tt ON t.id = tt.tag_id "
         f"WHERE tt.todo_id IN ({placeholders}) ORDER BY t.name",
         todo_ids,
-    ).fetchall()
+    )
     result = {tid: [] for tid in todo_ids}
-    for row in rows:
+    for row in cur.fetchall():
         result[row["todo_id"]].append(row["name"])
     return result
 
@@ -102,37 +108,38 @@ bp = Blueprint("todos", __name__)
 def list_todos():
     """List all todos for the current user, with optional search and filters."""
     db = get_db()
+    cur = db.cursor()
     today = date.today()
 
     # Base query — always filter by user (qualified for JOIN compatibility)
-    clauses = ["todos.user_id = ?", "todos.deleted_at IS NULL"]
+    clauses = ["todos.user_id = %s", "todos.deleted_at IS NULL"]
     params = [current_user.id]
 
     # Keyword search
     q = request.args.get("q", "").strip()
     if q:
         q_escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-        clauses.append("title LIKE ? ESCAPE '\\'")
+        clauses.append("title ILIKE %s ESCAPE '\\'")
         params.append(f"%{q_escaped}%")
 
     # Status filter
     status = request.args.get("status", "all")
     if status == "active":
-        clauses.append("completed = 0")
+        clauses.append("completed = false")
     elif status == "completed":
-        clauses.append("completed = 1")
+        clauses.append("completed = true")
 
     # Due date filter
     due = request.args.get("due", "all")
     if due == "overdue":
-        clauses.append("due_date IS NOT NULL AND due_date < ?")
+        clauses.append("due_date IS NOT NULL AND due_date < %s")
         params.append(today.isoformat())
     elif due == "today":
-        clauses.append("due_date = ?")
+        clauses.append("due_date = %s")
         params.append(today.isoformat())
     elif due == "week":
         week_end = (today + timedelta(days=6)).isoformat()
-        clauses.append("due_date IS NOT NULL AND due_date >= ? AND due_date <= ?")
+        clauses.append("due_date IS NOT NULL AND due_date >= %s AND due_date <= %s")
         params.append(today.isoformat())
         params.append(week_end)
     elif due == "none":
@@ -146,16 +153,17 @@ def list_todos():
             " JOIN todo_tags tt ON todos.id = tt.todo_id"
             " JOIN tags tg ON tt.tag_id = tg.id"
         )
-        clauses.append("tg.user_id = ? AND tg.name = ?")
+        clauses.append("tg.user_id = %s AND tg.name = %s")
         params.append(current_user.id)
         params.append(tag)
 
     where = " AND ".join(clauses)
-    todos = db.execute(
+    cur.execute(
         f"SELECT todos.* FROM todos{join_clause} WHERE {where} "
         "ORDER BY completed ASC, due_date IS NULL ASC, due_date ASC, created_at DESC",
         params,
-    ).fetchall()
+    )
+    todos = cur.fetchall()
 
     # Fetch tags for all returned todos
     todo_ids = [t["id"] for t in todos]
@@ -167,7 +175,7 @@ def list_todos():
     return render_template(
         "todos/list.html",
         todos=todos,
-        today=today.isoformat(),
+        today=today,
         search_q=q,
         filter_status=status,
         filter_due=due,
@@ -202,17 +210,20 @@ def add():
 
         try:
             db = get_db()
-            cursor = db.execute(
+            cur = db.cursor()
+            cur.execute(
                 "INSERT INTO todos (user_id, title, due_date, description)"
-                " VALUES (?, ?, ?, ?)",
+                " VALUES (%s, %s, %s, %s) RETURNING id",
                 (current_user.id, title, due_date, description),
             )
+            todo_id = cur.fetchone()["id"]
             if tag_names:
-                _sync_tags(db, current_user.id, cursor.lastrowid, tag_names)
+                _sync_tags(db, current_user.id, todo_id, tag_names)
             db.commit()
             logger.info("Todo created by user %s: %r", current_user.id, title)
             flash("Todo added.", "success")
         except Exception:
+            db.rollback()
             logger.error(
                 "Failed to create todo for user %s", current_user.id, exc_info=True
             )
@@ -227,14 +238,16 @@ def toggle(todo_id):
     """Toggle a todo's completed status."""
     try:
         db = get_db()
-        result = db.execute(
+        cur = db.cursor()
+        cur.execute(
             "UPDATE todos SET completed = NOT completed,"
             " updated_at = CURRENT_TIMESTAMP"
-            " WHERE id = ? AND user_id = ? AND deleted_at IS NULL",
+            " WHERE id = %s AND user_id = %s AND deleted_at IS NULL",
             (todo_id, current_user.id),
         )
         db.commit()
     except Exception:
+        db.rollback()
         logger.error(
             "Failed to toggle todo %s for user %s",
             todo_id,
@@ -244,7 +257,7 @@ def toggle(todo_id):
         flash("An error occurred while toggling the todo.", "error")
         return redirect(url_for("todos.list_todos"))
 
-    if result.rowcount == 0:
+    if cur.rowcount == 0:
         logger.warning(
             "Toggle failed: todo %s not found for user %s", todo_id, current_user.id
         )
@@ -259,10 +272,12 @@ def toggle(todo_id):
 def edit(todo_id):
     """Edit a todo's title."""
     db = get_db()
-    todo = db.execute(
-        "SELECT * FROM todos WHERE id = ? AND user_id = ? AND deleted_at IS NULL",
+    cur = db.cursor()
+    cur.execute(
+        "SELECT * FROM todos WHERE id = %s AND user_id = %s AND deleted_at IS NULL",
         (todo_id, current_user.id),
-    ).fetchone()
+    )
+    todo = cur.fetchone()
 
     if todo is None:
         logger.warning(
@@ -296,10 +311,10 @@ def edit(todo_id):
             tag_names = _parse_tags(request.form.get("tags", ""))
 
             try:
-                db.execute(
-                    "UPDATE todos SET title = ?, due_date = ?,"
-                    " description = ?, updated_at = CURRENT_TIMESTAMP"
-                    " WHERE id = ? AND user_id = ? AND deleted_at IS NULL",
+                cur.execute(
+                    "UPDATE todos SET title = %s, due_date = %s,"
+                    " description = %s, updated_at = CURRENT_TIMESTAMP"
+                    " WHERE id = %s AND user_id = %s AND deleted_at IS NULL",
                     (title, due_date, description, todo_id, current_user.id),
                 )
                 _sync_tags(db, current_user.id, todo_id, tag_names)
@@ -310,6 +325,7 @@ def edit(todo_id):
                 flash("Todo updated.", "success")
                 return redirect(url_for("todos.list_todos"))
             except Exception:
+                db.rollback()
                 logger.error(
                     "Failed to edit todo %s for user %s",
                     todo_id,
@@ -331,13 +347,15 @@ def delete(todo_id):
     """Soft-delete a todo (sets deleted_at instead of removing the row)."""
     try:
         db = get_db()
-        result = db.execute(
-            "UPDATE todos SET deleted_at = datetime('now') "
-            "WHERE id = ? AND user_id = ? AND deleted_at IS NULL",
+        cur = db.cursor()
+        cur.execute(
+            "UPDATE todos SET deleted_at = NOW() "
+            "WHERE id = %s AND user_id = %s AND deleted_at IS NULL",
             (todo_id, current_user.id),
         )
         db.commit()
     except Exception:
+        db.rollback()
         logger.error(
             "Failed to delete todo %s for user %s",
             todo_id,
@@ -347,7 +365,7 @@ def delete(todo_id):
         flash("An error occurred while deleting the todo.", "error")
         return redirect(url_for("todos.list_todos"))
 
-    if result.rowcount == 0:
+    if cur.rowcount == 0:
         logger.warning(
             "Delete failed: todo %s not found for user %s", todo_id, current_user.id
         )
@@ -369,13 +387,15 @@ def restore(todo_id):
     """Restore a soft-deleted todo (undo delete)."""
     try:
         db = get_db()
-        result = db.execute(
+        cur = db.cursor()
+        cur.execute(
             "UPDATE todos SET deleted_at = NULL "
-            "WHERE id = ? AND user_id = ? AND deleted_at IS NOT NULL",
+            "WHERE id = %s AND user_id = %s AND deleted_at IS NOT NULL",
             (todo_id, current_user.id),
         )
         db.commit()
     except Exception:
+        db.rollback()
         logger.error(
             "Failed to restore todo %s for user %s",
             todo_id,
@@ -385,7 +405,7 @@ def restore(todo_id):
         flash("An error occurred while restoring the todo.", "error")
         return redirect(url_for("todos.list_todos"))
 
-    if result.rowcount == 0:
+    if cur.rowcount == 0:
         logger.warning(
             "Restore failed: todo %s not found or not deleted for user %s",
             todo_id,

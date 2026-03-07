@@ -1,5 +1,6 @@
 import logging
 
+import psycopg2
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import LoginManager, UserMixin, current_user, login_user, logout_user
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -29,9 +30,9 @@ def init_login_manager(app):
     @login_manager.user_loader
     def load_user(user_id):
         db = get_db()
-        row = db.execute(
-            "SELECT id, username FROM users WHERE id = ?", (user_id,)
-        ).fetchone()
+        cur = db.cursor()
+        cur.execute("SELECT id, username FROM users WHERE id = %s", (user_id,))
+        row = cur.fetchone()
         if row is None:
             return None
         return User(row["id"], row["username"])
@@ -64,14 +65,17 @@ def register():
         if error is None:
             db = get_db()
             try:
-                db.execute(
-                    "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+                cur = db.cursor()
+                cur.execute(
+                    "INSERT INTO users (username, password_hash) VALUES (%s, %s)",
                     (username, generate_password_hash(password)),
                 )
                 db.commit()
-            except db.IntegrityError:
+            except psycopg2.IntegrityError:
+                db.rollback()
                 error = f"Username '{username}' is already taken."
             except Exception:
+                db.rollback()
                 logger.error("Failed to register user: %s", username, exc_info=True)
                 error = "An error occurred during registration."
             else:
@@ -95,10 +99,12 @@ def login():
 
         try:
             db = get_db()
-            row = db.execute(
-                "SELECT id, username, password_hash FROM users WHERE username = ?",
+            cur = db.cursor()
+            cur.execute(
+                "SELECT id, username, password_hash FROM users WHERE username = %s",
                 (username,),
-            ).fetchone()
+            )
+            row = cur.fetchone()
         except Exception:
             logger.error(
                 "Database error during login for username: %s", username, exc_info=True

@@ -22,7 +22,9 @@ def create_app(test_config=None):
 
     app.config.from_mapping(
         SECRET_KEY=os.environ.get("SECRET_KEY", "dev"),
-        DATABASE=os.path.join(app.instance_path, "todo.db"),
+        DATABASE_URL=os.environ.get(
+            "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/todo_db"
+        ),
     )
 
     if test_config is not None:

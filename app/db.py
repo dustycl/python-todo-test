@@ -1,7 +1,8 @@
 import os
-import sqlite3
 
 import click
+import psycopg2
+import psycopg2.extras
 from flask import current_app, g
 from flask.cli import with_appcontext
 
@@ -10,16 +11,14 @@ def get_db():
     """Get a database connection for the current request.
 
     Stores the connection on Flask's `g` object so the same connection
-    is reused within a single request. Enables foreign key enforcement
-    and returns rows as sqlite3.Row for dict-like access.
+    is reused within a single request. Returns rows as RealDictRow for
+    dict-like access.
     """
     if "db" not in g:
-        g.db = sqlite3.connect(
-            current_app.config["DATABASE"],
-            timeout=5,
+        g.db = psycopg2.connect(
+            current_app.config["DATABASE_URL"],
+            cursor_factory=psycopg2.extras.RealDictCursor,
         )
-        g.db.row_factory = sqlite3.Row
-        g.db.execute("PRAGMA foreign_keys = ON")
     return g.db
 
 
@@ -44,7 +43,8 @@ def _get_migrations_dir():
 
 def _ensure_migrations_table(db):
     """Create the schema_migrations tracking table if it doesn't exist."""
-    db.execute(
+    cur = db.cursor()
+    cur.execute(
         "CREATE TABLE IF NOT EXISTS schema_migrations ("
         "  version INTEGER PRIMARY KEY,"
         "  applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
@@ -55,9 +55,9 @@ def _ensure_migrations_table(db):
 
 def _get_pending_migrations(db):
     """Return a sorted list of (version, filepath) for unapplied migrations."""
-    applied = {
-        row[0] for row in db.execute("SELECT version FROM schema_migrations").fetchall()
-    }
+    cur = db.cursor()
+    cur.execute("SELECT version FROM schema_migrations")
+    applied = {row["version"] for row in cur.fetchall()}
 
     migrations_dir = _get_migrations_dir()
     if not os.path.exists(migrations_dir):
@@ -85,14 +85,18 @@ def _baseline_existing_db(db):
     record every known migration as already applied so that ALTER-style
     migrations are not re-run.
     """
-    has_rows = db.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0]
+    cur = db.cursor()
+    cur.execute("SELECT COUNT(*) AS cnt FROM schema_migrations")
+    has_rows = cur.fetchone()["cnt"]
     if has_rows:
         return
 
-    # Check if application tables already exist
-    has_tables = db.execute(
-        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='users'"
-    ).fetchone()[0]
+    # Check if application tables already exist (Postgres introspection)
+    cur.execute(
+        "SELECT COUNT(*) AS cnt FROM information_schema.tables "
+        "WHERE table_schema = 'public' AND table_name = 'users'"
+    )
+    has_tables = cur.fetchone()["cnt"]
     if not has_tables:
         return  # Fresh database — nothing to baseline
 
@@ -108,8 +112,9 @@ def _baseline_existing_db(db):
             version = int(filename.split("_", 1)[0])
         except ValueError:
             continue
-        db.execute(
-            "INSERT OR IGNORE INTO schema_migrations (version) VALUES (?)",
+        cur.execute(
+            "INSERT INTO schema_migrations (version) VALUES (%s) "
+            "ON CONFLICT DO NOTHING",
             (version,),
         )
     db.commit()
@@ -122,12 +127,13 @@ def run_migrations():
     _baseline_existing_db(db)
 
     pending = _get_pending_migrations(db)
+    cur = db.cursor()
     for version, filepath in pending:
         with open(filepath) as f:
             sql = f.read()
-        db.executescript(sql)
-        db.execute(
-            "INSERT INTO schema_migrations (version) VALUES (?)",
+        cur.execute(sql)
+        cur.execute(
+            "INSERT INTO schema_migrations (version) VALUES (%s)",
             (version,),
         )
         db.commit()

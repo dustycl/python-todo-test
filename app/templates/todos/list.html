@@ -71,8 +71,8 @@
 </datalist>
 {% endif %}
 
-{% set active = todos | selectattr("completed", "equalto", 0) | list %}
-{% set done = todos | selectattr("completed", "equalto", 1) | list %}
+{% set active = todos | selectattr("completed", "equalto", false) | list %}
+{% set done = todos | selectattr("completed", "equalto", true) | list %}
 
 {% if not todos %}
 <div class="empty-state">
