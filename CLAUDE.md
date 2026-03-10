@@ -46,6 +46,16 @@ Flask app using the **app factory pattern** (`create_app()` in `app/__init__.py`
 
 Tests in `tests/` use pytest fixtures from `tests/conftest.py` that create a fresh PostgreSQL test database per test (via `CREATE DATABASE` / `DROP DATABASE`). Requires a running PostgreSQL instance — use `docker compose up -d db` or set `TEST_DATABASE_URL` to point to your Postgres server. Helper functions handle registration, login, and CSRF token extraction. Cross-user isolation is extensively tested.
 
+## Deployment
+
+**Local with Docker Compose**: `docker compose up` starts both the Postgres database and the web app. Set `SECRET_KEY` in `.env` (see `.env.example`).
+
+**Railway**: Connect the GitHub repo in Railway, add a PostgreSQL plugin, and set `SECRET_KEY` as an environment variable. Railway auto-injects `DATABASE_URL` from the Postgres plugin and sets `PORT` dynamically. The `Procfile` handles the start command.
+
+Required environment variables for production:
+- `SECRET_KEY` — random secret for session signing
+- `DATABASE_URL` — PostgreSQL connection string (auto-set by Railway's Postgres plugin)
+
 ## Conventions
 
 - No ORM — all database access uses raw SQL with `psycopg2` parameterized queries (`%s` placeholders)
