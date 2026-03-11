@@ -18,7 +18,7 @@
                 {% if current_user.is_admin %}
                 <li><a href="{{ url_for('admin.dashboard') }}">Admin</a></li>
                 {% endif %}
-                <li>{{ current_user.username }}</li>
+                <li>{{ current_user.display_name }}</li>
                 <li>
                     <form method="post" action="{{ url_for('auth.logout') }}" style="margin:0">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

@@ -2,7 +2,14 @@ import logging
 
 import psycopg2
 from flask import Blueprint, flash, redirect, render_template, request, url_for
-from flask_login import LoginManager, UserMixin, current_user, login_user, logout_user
+from flask_login import (
+    LoginManager,
+    UserMixin,
+    current_user,
+    login_required,
+    login_user,
+    logout_user,
+)
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from .db import get_db
@@ -12,13 +19,40 @@ logger = logging.getLogger(__name__)
 bp = Blueprint("auth", __name__, url_prefix="/auth")
 
 
+@bp.before_app_request
+def require_profile_completion():
+    if not current_user.is_authenticated:
+        return
+    if request.endpoint in ("auth.complete_profile", "auth.logout", "static"):
+        return
+    if not current_user.profile_complete:
+        return redirect(url_for("auth.complete_profile"))
+
+
 class User(UserMixin):
     """Simple user class for flask-login integration."""
 
-    def __init__(self, id, username, is_admin=False):
+    def __init__(self, id, username, email=None, first_name=None, last_name=None, is_admin=False):
         self.id = id
         self.username = username
+        self.email = email
+        self.first_name = first_name
+        self.last_name = last_name
         self.is_admin = is_admin
+
+    @property
+    def display_name(self):
+        if self.first_name:
+            return self.first_name
+        if self.username:
+            return self.username
+        if self.email:
+            return self.email.split("@")[0]
+        return "User"
+
+    @property
+    def profile_complete(self):
+        return self.email is not None
 
 
 def init_login_manager(app):
@@ -32,11 +66,18 @@ def init_login_manager(app):
     def load_user(user_id):
         db = get_db()
         cur = db.cursor()
-        cur.execute("SELECT id, username, is_admin FROM users WHERE id = %s", (user_id,))
+        cur.execute(
+            "SELECT id, username, email, first_name, last_name, is_admin "
+            "FROM users WHERE id = %s",
+            (user_id,),
+        )
         row = cur.fetchone()
         if row is None:
             return None
-        return User(row["id"], row["username"], row["is_admin"])
+        return User(
+            row["id"], row["username"], row["email"],
+            row["first_name"], row["last_name"], row["is_admin"],
+        )
 
 
 @bp.route("/register", methods=["GET", "POST"])
@@ -45,17 +86,27 @@ def register():
         return redirect(url_for("todos.list_todos"))
 
     if request.method == "POST":
-        username = request.form.get("username", "").strip()
+        email = request.form.get("email", "").strip().lower()
+        first_name = request.form.get("first_name", "").strip()
+        last_name = request.form.get("last_name", "").strip()
         password = request.form.get("password", "")
         confirm = request.form.get("confirm", "")
 
         error = None
-        if not username:
-            error = "Username is required."
-        elif len(username) < 3 or len(username) > 30:
-            error = "Username must be between 3 and 30 characters."
-        elif not username.isalnum():
-            error = "Username must be alphanumeric."
+        if not email:
+            error = "Email is required."
+        elif "@" not in email or "." not in email.split("@")[-1]:
+            error = "Please enter a valid email address."
+        elif len(email) > 254:
+            error = "Email must be 254 characters or less."
+        elif not first_name:
+            error = "First name is required."
+        elif len(first_name) > 100:
+            error = "First name must be 100 characters or less."
+        elif not last_name:
+            error = "Last name is required."
+        elif len(last_name) > 100:
+            error = "Last name must be 100 characters or less."
         elif not password:
             error = "Password is required."
         elif len(password) < 8:
@@ -81,9 +132,9 @@ def register():
 
                 is_admin = invite_row is not None
                 cur.execute(
-                    "INSERT INTO users (username, password_hash, is_admin) "
-                    "VALUES (%s, %s, %s) RETURNING id",
-                    (username, generate_password_hash(password), is_admin),
+                    "INSERT INTO users (email, first_name, last_name, password_hash, is_admin) "
+                    "VALUES (%s, %s, %s, %s, %s) RETURNING id",
+                    (email, first_name, last_name, generate_password_hash(password), is_admin),
                 )
                 new_user_id = cur.fetchone()["id"]
 
@@ -98,13 +149,13 @@ def register():
                 db.commit()
             except psycopg2.IntegrityError:
                 db.rollback()
-                error = f"Username '{username}' is already taken."
+                error = "An account with this email already exists."
             except Exception:
                 db.rollback()
-                logger.error("Failed to register user: %s", username, exc_info=True)
+                logger.error("Failed to register user: %s", email, exc_info=True)
                 error = "An error occurred during registration."
             else:
-                logger.info("User registered: %s (admin=%s)", username, is_admin)
+                logger.info("User registered: %s (admin=%s)", email, is_admin)
                 flash("Registration successful. Please log in.", "success")
                 return redirect(url_for("auth.login"))
 
@@ -119,40 +170,107 @@ def login():
         return redirect(url_for("todos.list_todos"))
 
     if request.method == "POST":
-        username = request.form.get("username", "").strip()
+        identifier = request.form.get("email", "").strip()
         password = request.form.get("password", "")
 
         try:
             db = get_db()
             cur = db.cursor()
-            cur.execute(
-                "SELECT id, username, password_hash FROM users WHERE username = %s",
-                (username,),
-            )
+            # Try email first, fall back to username for legacy users
+            if "@" in identifier:
+                cur.execute(
+                    "SELECT id, username, email, first_name, last_name, password_hash, is_admin "
+                    "FROM users WHERE email = %s",
+                    (identifier.lower(),),
+                )
+            else:
+                cur.execute(
+                    "SELECT id, username, email, first_name, last_name, password_hash, is_admin "
+                    "FROM users WHERE username = %s",
+                    (identifier,),
+                )
             row = cur.fetchone()
         except Exception:
             logger.error(
-                "Database error during login for username: %s", username, exc_info=True
+                "Database error during login for: %s", identifier, exc_info=True
             )
             flash("An error occurred during login.", "error")
             return render_template("auth/login.html")
 
         if row is None or not check_password_hash(row["password_hash"], password):
-            logger.warning("Failed login attempt for username: %s", username)
-            flash("Invalid username or password.", "error")
+            logger.warning("Failed login attempt for: %s", identifier)
+            flash("Invalid email or password.", "error")
         else:
-            user = User(row["id"], row["username"])
+            user = User(
+                row["id"], row["username"], row["email"],
+                row["first_name"], row["last_name"], row["is_admin"],
+            )
             login_user(user)
-            logger.info("User logged in: %s (id=%s)", user.username, user.id)
+            logger.info("User logged in: %s (id=%s)", identifier, user.id)
             next_page = request.args.get("next")
             return redirect(next_page or url_for("todos.list_todos"))
 
     return render_template("auth/login.html")
 
 
+@bp.route("/complete-profile", methods=["GET", "POST"])
+@login_required
+def complete_profile():
+    if current_user.profile_complete:
+        return redirect(url_for("todos.list_todos"))
+
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        first_name = request.form.get("first_name", "").strip()
+        last_name = request.form.get("last_name", "").strip()
+
+        error = None
+        if not email:
+            error = "Email is required."
+        elif "@" not in email or "." not in email.split("@")[-1]:
+            error = "Please enter a valid email address."
+        elif len(email) > 254:
+            error = "Email must be 254 characters or less."
+        elif not first_name:
+            error = "First name is required."
+        elif len(first_name) > 100:
+            error = "First name must be 100 characters or less."
+        elif not last_name:
+            error = "Last name is required."
+        elif len(last_name) > 100:
+            error = "Last name must be 100 characters or less."
+
+        if error is None:
+            db = get_db()
+            try:
+                cur = db.cursor()
+                cur.execute(
+                    "UPDATE users SET email = %s, first_name = %s, last_name = %s "
+                    "WHERE id = %s",
+                    (email, first_name, last_name, current_user.id),
+                )
+                db.commit()
+            except psycopg2.IntegrityError:
+                db.rollback()
+                error = "This email is already in use."
+            except Exception:
+                db.rollback()
+                error = "An error occurred. Please try again."
+            else:
+                current_user.email = email
+                current_user.first_name = first_name
+                current_user.last_name = last_name
+                flash("Profile completed successfully!", "success")
+                return redirect(url_for("todos.list_todos"))
+
+        flash(error, "error")
+
+    return render_template("auth/complete_profile.html")
+
+
 @bp.route("/logout", methods=["POST"])
 def logout():
-    logger.info("User logged out: %s", current_user.username)
+    logger.info("User logged out: %s", current_user.display_name)
     logout_user()
     flash("You have been logged out.", "success")
     return redirect(url_for("auth.login"))

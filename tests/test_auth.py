@@ -1,3 +1,8 @@
+from werkzeug.security import generate_password_hash
+
+from app.db import get_db
+
+
 def extract_csrf(response):
     """Extract CSRF token from a response's HTML."""
     text = response.data.decode()
@@ -13,14 +18,17 @@ def get_csrf_token(client):
     return extract_csrf(response)
 
 
-def register(client, username="testuser", password="password123", confirm=None):
+def register(client, email="test@example.com", first_name="Test", last_name="User",
+             password="password123", confirm=None):
     """Helper to register a user with CSRF token."""
     csrf = get_csrf_token(client)
     return client.post(
         "/auth/register",
         data={
             "csrf_token": csrf,
-            "username": username,
+            "email": email,
+            "first_name": first_name,
+            "last_name": last_name,
             "password": password,
             "confirm": confirm or password,
         },
@@ -28,18 +36,30 @@ def register(client, username="testuser", password="password123", confirm=None):
     )
 
 
-def login(client, username="testuser", password="password123"):
+def login(client, email="test@example.com", password="password123"):
     """Helper to log in a user with CSRF token."""
     csrf = get_csrf_token(client)
     return client.post(
         "/auth/login",
         data={
             "csrf_token": csrf,
-            "username": username,
+            "email": email,
             "password": password,
         },
         follow_redirects=True,
     )
+
+
+def create_legacy_user(app, username="legacyuser", password="password123"):
+    """Insert a user with username only (no email) to simulate pre-migration user."""
+    with app.app_context():
+        db = get_db()
+        cur = db.cursor()
+        cur.execute(
+            "INSERT INTO users (username, password_hash) VALUES (%s, %s)",
+            (username, generate_password_hash(password)),
+        )
+        db.commit()
 
 
 # --- Registration tests ---
@@ -56,25 +76,30 @@ def test_register_success(client):
     assert b"Registration successful" in response.data
 
 
-def test_register_duplicate_username(client):
-    register(client, username="alice")
-    response = register(client, username="alice")
-    assert b"already taken" in response.data
+def test_register_duplicate_email(client):
+    register(client, email="alice@example.com")
+    response = register(client, email="alice@example.com")
+    assert b"already exists" in response.data
 
 
-def test_register_empty_username(client):
-    response = register(client, username="")
-    assert b"Username is required" in response.data
+def test_register_empty_email(client):
+    response = register(client, email="")
+    assert b"Email is required" in response.data
 
 
-def test_register_short_username(client):
-    response = register(client, username="ab")
-    assert b"between 3 and 30" in response.data
+def test_register_invalid_email(client):
+    response = register(client, email="notanemail")
+    assert b"valid email" in response.data
 
 
-def test_register_non_alphanumeric_username(client):
-    response = register(client, username="bad user!")
-    assert b"alphanumeric" in response.data
+def test_register_empty_first_name(client):
+    response = register(client, first_name="")
+    assert b"First name is required" in response.data
+
+
+def test_register_empty_last_name(client):
+    response = register(client, last_name="")
+    assert b"Last name is required" in response.data
 
 
 def test_register_empty_password(client):
@@ -112,12 +137,145 @@ def test_login_success(client):
 def test_login_wrong_password(client):
     register(client)
     response = login(client, password="wrongpassword")
-    assert b"Invalid username or password" in response.data
+    assert b"Invalid email or password" in response.data
 
 
 def test_login_nonexistent_user(client):
-    response = login(client, username="nobody")
-    assert b"Invalid username or password" in response.data
+    response = login(client, email="nobody@example.com")
+    assert b"Invalid email or password" in response.data
+
+
+def test_legacy_user_login_with_username(app, client):
+    """Legacy users can still log in with their username."""
+    create_legacy_user(app, username="olduser", password="password123")
+    csrf = get_csrf_token(client)
+    response = client.post(
+        "/auth/login",
+        data={
+            "csrf_token": csrf,
+            "email": "olduser",
+            "password": "password123",
+        },
+        follow_redirects=True,
+    )
+    # Should be redirected to complete profile
+    assert b"Complete Your Profile" in response.data
+
+
+# --- Profile completion tests ---
+
+
+def test_legacy_user_redirected_to_complete_profile(app, client):
+    """Legacy users without email are redirected to complete their profile."""
+    create_legacy_user(app)
+    csrf = get_csrf_token(client)
+    client.post(
+        "/auth/login",
+        data={
+            "csrf_token": csrf,
+            "email": "legacyuser",
+            "password": "password123",
+        },
+    )
+    response = client.get("/", follow_redirects=True)
+    assert b"Complete Your Profile" in response.data
+
+
+def test_complete_profile_success(app, client):
+    """Legacy user can complete their profile with email and name."""
+    create_legacy_user(app)
+    csrf = get_csrf_token(client)
+    client.post(
+        "/auth/login",
+        data={
+            "csrf_token": csrf,
+            "email": "legacyuser",
+            "password": "password123",
+        },
+    )
+    with client.session_transaction() as sess:
+        csrf = sess["csrf_token"]
+    response = client.post(
+        "/auth/complete-profile",
+        data={
+            "csrf_token": csrf,
+            "email": "legacy@example.com",
+            "first_name": "Legacy",
+            "last_name": "User",
+        },
+        follow_redirects=True,
+    )
+    assert b"Profile completed" in response.data
+
+
+def test_complete_profile_duplicate_email(app, client):
+    """Profile completion rejects an email already in use."""
+    # Register a normal user with an email
+    register(client, email="taken@example.com")
+
+    # Create and log in a legacy user
+    create_legacy_user(app)
+    client2 = app.test_client()
+    client2.get("/auth/login")
+    with client2.session_transaction() as sess:
+        csrf = sess["csrf_token"]
+    client2.post(
+        "/auth/login",
+        data={
+            "csrf_token": csrf,
+            "email": "legacyuser",
+            "password": "password123",
+        },
+    )
+    with client2.session_transaction() as sess:
+        csrf = sess["csrf_token"]
+    response = client2.post(
+        "/auth/complete-profile",
+        data={
+            "csrf_token": csrf,
+            "email": "taken@example.com",
+            "first_name": "Legacy",
+            "last_name": "User",
+        },
+        follow_redirects=True,
+    )
+    assert b"already in use" in response.data
+
+
+def test_complete_profile_missing_fields(app, client):
+    """Profile completion validates required fields."""
+    create_legacy_user(app)
+    csrf = get_csrf_token(client)
+    client.post(
+        "/auth/login",
+        data={
+            "csrf_token": csrf,
+            "email": "legacyuser",
+            "password": "password123",
+        },
+    )
+    with client.session_transaction() as sess:
+        csrf = sess["csrf_token"]
+    response = client.post(
+        "/auth/complete-profile",
+        data={
+            "csrf_token": csrf,
+            "email": "",
+            "first_name": "",
+            "last_name": "",
+        },
+        follow_redirects=True,
+    )
+    assert b"Email is required" in response.data
+
+
+def test_completed_profile_not_redirected(client):
+    """Users with a complete profile are not redirected to complete-profile."""
+    register(client)
+    login(client)
+    response = client.get("/")
+    assert response.status_code == 200
+    assert b"Complete Your Profile" not in response.data
 
 
 # --- Logout tests ---
@@ -169,7 +327,7 @@ def test_post_without_csrf_fails(client):
     response = client.post(
         "/auth/login",
         data={
-            "username": "test",
+            "email": "test@example.com",
             "password": "test",
         },
     )
@@ -181,7 +339,7 @@ def test_post_with_wrong_csrf_fails(client):
         "/auth/login",
         data={
             "csrf_token": "wrong-token",
-            "username": "test",
+            "email": "test@example.com",
             "password": "test",
         },
     )

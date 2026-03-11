@@ -41,7 +41,8 @@ def dashboard():
     recent_signups = cur.fetchone()["recent"]
 
     cur.execute(
-        "SELECT u.id, u.username, u.created_at, u.is_admin, "
+        "SELECT u.id, u.username, u.email, u.first_name, u.last_name, "
+        "u.created_at, u.is_admin, "
         "COUNT(t.id) AS todo_count "
         "FROM users u "
         "LEFT JOIN todos t ON t.user_id = u.id AND t.deleted_at IS NULL "
@@ -52,7 +53,8 @@ def dashboard():
 
     # Active (unused) invites
     cur.execute(
-        "SELECT i.code, i.created_at, u.username AS created_by_username "
+        "SELECT i.code, i.created_at, "
+        "COALESCE(u.first_name, u.username, u.email) AS created_by_name "
         "FROM admin_invites i "
         "JOIN users u ON u.id = i.created_by "
         "WHERE i.used_by IS NULL "
@@ -63,8 +65,8 @@ def dashboard():
     # Used invites
     cur.execute(
         "SELECT i.code, i.created_at, i.used_at, "
-        "c.username AS created_by_username, "
-        "u.username AS used_by_username "
+        "COALESCE(c.first_name, c.username, c.email) AS created_by_name, "
+        "COALESCE(u.first_name, u.username, u.email) AS used_by_name "
         "FROM admin_invites i "
         "JOIN users c ON c.id = i.created_by "
         "JOIN users u ON u.id = i.used_by "
@@ -104,6 +106,6 @@ def create_invite():
     invite_url = url_for("auth.register", invite=code, _external=True)
     flash(f'Invite created: <code>{invite_url}</code>', "success")
     logger.info(
-        "Admin invite created by %s (id=%s)", current_user.username, current_user.id
+        "Admin invite created by %s (id=%s)", current_user.display_name, current_user.id
     )
     return redirect(url_for("admin.dashboard"))

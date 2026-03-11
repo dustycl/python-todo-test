@@ -1,10 +1,11 @@
 {% extends "base.html" %}
 
-{% block title %}Register - Todo App{% endblock %}
+{% block title %}Complete Your Profile - Todo App{% endblock %}
 
 {% block content %}
 <article>
-    <h2>Register</h2>
+    <h2>Complete Your Profile</h2>
+    <p>Please provide your email and name to continue using the app.</p>
     <form method="post">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <label for="email">Email</label>
@@ -13,13 +14,7 @@
         <input type="text" id="first_name" name="first_name" required maxlength="100">
         <label for="last_name">Last Name</label>
         <input type="text" id="last_name" name="last_name" required maxlength="100">
-        <label for="password">Password</label>
-        <input type="password" id="password" name="password" required minlength="8">
-        <small>At least 8 characters</small>
-        <label for="confirm">Confirm Password</label>
-        <input type="password" id="confirm" name="confirm" required>
-        <button type="submit">Register</button>
+        <button type="submit">Save Profile</button>
     </form>
-    <p>Already have an account? <a href="{{ url_for('auth.login') }}">Log in</a></p>
 </article>
 {% endblock %}

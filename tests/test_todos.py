@@ -9,7 +9,7 @@ def get_csrf(client):
         return sess.get("csrf_token", "")
 
 
-def register_and_login(client, username="testuser", password="password123"):
+def register_and_login(client, email="test@example.com", first_name="Test", last_name="User", password="password123"):
     """Register a user and log them in. Returns the CSRF token."""
     # GET login page to establish session with CSRF token
     client.get("/auth/login")
@@ -20,7 +20,9 @@ def register_and_login(client, username="testuser", password="password123"):
         "/auth/register",
         data={
             "csrf_token": csrf,
-            "username": username,
+            "email": email,
+            "first_name": first_name,
+            "last_name": last_name,
             "password": password,
             "confirm": password,
         },
@@ -31,7 +33,7 @@ def register_and_login(client, username="testuser", password="password123"):
         "/auth/login",
         data={
             "csrf_token": csrf,
-            "username": username,
+            "email": email,
             "password": password,
         },
     )
@@ -292,13 +294,13 @@ def test_delete_nonexistent(client):
 
 def test_user_cannot_see_other_users_todos(client, app):
     """User B should not see User A's todos."""
-    register_and_login(client, username="alice")
+    register_and_login(client, email="alice@example.com")
     add_todo(client, "Alice's secret todo")
 
     # Log out alice, register and login bob
     csrf = get_csrf(client)
     client.post("/auth/logout", data={"csrf_token": csrf})
-    register_and_login(client, username="bob")
+    register_and_login(client, email="bob@example.com")
 
     response = client.get("/")
     assert b"Alice" not in response.data
@@ -307,7 +309,7 @@ def test_user_cannot_see_other_users_todos(client, app):
 
 def test_user_cannot_toggle_other_users_todo(client, app):
     """User B should not be able to toggle User A's todo."""
-    register_and_login(client, username="alice")
+    register_and_login(client, email="alice@example.com")
     add_todo(client, "Alice's todo")
 
     with app.app_context():
@@ -316,7 +318,7 @@ def test_user_cannot_toggle_other_users_todo(client, app):
 
     csrf = get_csrf(client)
     client.post("/auth/logout", data={"csrf_token": csrf})
-    register_and_login(client, username="bob")
+    register_and_login(client, email="bob@example.com")
 
     csrf = get_csrf(client)
     response = client.post(f"/toggle/{todo_id}", data={"csrf_token": csrf})
@@ -325,7 +327,7 @@ def test_user_cannot_toggle_other_users_todo(client, app):
 
 def test_user_cannot_edit_other_users_todo(client, app):
     """User B should not be able to edit User A's todo."""
-    register_and_login(client, username="alice")
+    register_and_login(client, email="alice@example.com")
     add_todo(client, "Alice's todo")
 
     with app.app_context():
@@ -334,7 +336,7 @@ def test_user_cannot_edit_other_users_todo(client, app):
 
     csrf = get_csrf(client)
     client.post("/auth/logout", data={"csrf_token": csrf})
-    register_and_login(client, username="bob")
+    register_and_login(client, email="bob@example.com")
 
     response = client.get(f"/edit/{todo_id}")
     assert response.status_code == 404
@@ -342,7 +344,7 @@ def test_user_cannot_edit_other_users_todo(client, app):
 
 def test_user_cannot_delete_other_users_todo(client, app):
     """User B should not be able to delete User A's todo."""
-    register_and_login(client, username="alice")
+    register_and_login(client, email="alice@example.com")
     add_todo(client, "Alice's todo")
 
     with app.app_context():
@@ -351,7 +353,7 @@ def test_user_cannot_delete_other_users_todo(client, app):
 
     csrf = get_csrf(client)
     client.post("/auth/logout", data={"csrf_token": csrf})
-    register_and_login(client, username="bob")
+    register_and_login(client, email="bob@example.com")
 
     csrf = get_csrf(client)
     response = client.post(f"/delete/{todo_id}", data={"csrf_token": csrf})
@@ -647,12 +649,12 @@ def test_invalid_filter_values_default_to_all(client):
 
 def test_search_respects_user_isolation(client):
     """Search should never return another user's todos."""
-    register_and_login(client, username="alice")
+    register_and_login(client, email="alice@example.com")
     add_todo(client, "Alice secret task")
 
     csrf = get_csrf(client)
     client.post("/auth/logout", data={"csrf_token": csrf})
-    register_and_login(client, username="bob")
+    register_and_login(client, email="bob@example.com")
     add_todo(client, "Bob public task")
 
     response = client.get("/?q=secret")
@@ -825,12 +827,12 @@ def test_empty_tags_ignored(client, app):
 
 def test_cross_user_tag_isolation(client, app):
     """User B should not see User A's tags in the filter dropdown."""
-    register_and_login(client, username="alice")
+    register_and_login(client, email="alice@example.com")
     add_todo(client, "Alice task", tags="secret-tag")
 
     csrf = get_csrf(client)
     client.post("/auth/logout", data={"csrf_token": csrf})
-    register_and_login(client, username="bob")
+    register_and_login(client, email="bob@example.com")
 
     response = client.get("/")
     assert b"secret-tag" not in response.data
@@ -1072,7 +1074,7 @@ def test_cannot_toggle_deleted_todo(client, app):
 
 def test_user_cannot_restore_other_users_todo(client, app):
     """User B should not be able to restore User A's deleted todo."""
-    register_and_login(client, username="alice")
+    register_and_login(client, email="alice@example.com")
     add_todo(client, "Alice's todo")
 
     with app.app_context():
@@ -1083,7 +1085,7 @@ def test_user_cannot_restore_other_users_todo(client, app):
     client.post(f"/delete/{todo_id}", data={"csrf_token": csrf})
 
     client.post("/auth/logout", data={"csrf_token": csrf})
-    register_and_login(client, username="bob")
+    register_and_login(client, email="bob@example.com")
 
     csrf = get_csrf(client)
     response = client.post(f"/restore/{todo_id}", data={"csrf_token": csrf})
