@@ -36,7 +36,7 @@ def test_init_db_creates_tables(app):
             "WHERE table_schema = 'public' AND table_name = 'users'"
         )
         columns = {row["column_name"] for row in cur.fetchall()}
-        assert columns == {"id", "username", "password_hash", "created_at"}
+        assert columns == {"id", "username", "password_hash", "created_at", "is_admin"}
 
         # Check todos table exists and has expected columns
         cur.execute(

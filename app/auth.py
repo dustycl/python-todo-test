@@ -15,9 +15,10 @@ bp = Blueprint("auth", __name__, url_prefix="/auth")
 class User(UserMixin):
     """Simple user class for flask-login integration."""
 
-    def __init__(self, id, username):
+    def __init__(self, id, username, is_admin=False):
         self.id = id
         self.username = username
+        self.is_admin = is_admin
 
 
 def init_login_manager(app):
@@ -31,11 +32,11 @@ def init_login_manager(app):
     def load_user(user_id):
         db = get_db()
         cur = db.cursor()
-        cur.execute("SELECT id, username FROM users WHERE id = %s", (user_id,))
+        cur.execute("SELECT id, username, is_admin FROM users WHERE id = %s", (user_id,))
         row = cur.fetchone()
         if row is None:
             return None
-        return User(row["id"], row["username"])
+        return User(row["id"], row["username"], row["is_admin"])
 
 
 @bp.route("/register", methods=["GET", "POST"])
@@ -63,13 +64,37 @@ def register():
             error = "Passwords do not match."
 
         if error is None:
+            invite_code = request.args.get("invite")
             db = get_db()
             try:
                 cur = db.cursor()
+
+                # Check for valid invite code
+                invite_row = None
+                if invite_code:
+                    cur.execute(
+                        "SELECT id FROM admin_invites "
+                        "WHERE code = %s AND used_by IS NULL",
+                        (invite_code,),
+                    )
+                    invite_row = cur.fetchone()
+
+                is_admin = invite_row is not None
                 cur.execute(
-                    "INSERT INTO users (username, password_hash) VALUES (%s, %s)",
-                    (username, generate_password_hash(password)),
+                    "INSERT INTO users (username, password_hash, is_admin) "
+                    "VALUES (%s, %s, %s) RETURNING id",
+                    (username, generate_password_hash(password), is_admin),
                 )
+                new_user_id = cur.fetchone()["id"]
+
+                # Mark invite as used
+                if invite_row:
+                    cur.execute(
+                        "UPDATE admin_invites SET used_by = %s, used_at = NOW() "
+                        "WHERE id = %s",
+                        (new_user_id, invite_row["id"]),
+                    )
+
                 db.commit()
             except psycopg2.IntegrityError:
                 db.rollback()
@@ -79,7 +104,7 @@ def register():
                 logger.error("Failed to register user: %s", username, exc_info=True)
                 error = "An error occurred during registration."
             else:
-                logger.info("User registered: %s", username)
+                logger.info("User registered: %s (admin=%s)", username, is_admin)
                 flash("Registration successful. Please log in.", "success")
                 return redirect(url_for("auth.login"))
 
