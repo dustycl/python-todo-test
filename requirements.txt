@@ -1,5 +1,6 @@
 flask
 flask-login
+flask-mail
 gunicorn
 psycopg2-binary
 python-dotenv

@@ -6,7 +6,7 @@ from logging.handlers import RotatingFileHandler
 
 from flask import Flask, g, render_template, request, session
 
-from . import db
+from . import db, email
 from .admin import bp as admin_bp
 from .auth import bp as auth_bp
 from .auth import init_login_manager
@@ -26,6 +26,12 @@ def create_app(test_config=None):
         DATABASE_URL=os.environ.get(
             "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/todo_db"
         ),
+        MAIL_SERVER=os.environ.get("MAIL_SERVER", "localhost"),
+        MAIL_PORT=int(os.environ.get("MAIL_PORT", 587)),
+        MAIL_USE_TLS=os.environ.get("MAIL_USE_TLS", "true").lower() == "true",
+        MAIL_USERNAME=os.environ.get("MAIL_USERNAME"),
+        MAIL_PASSWORD=os.environ.get("MAIL_PASSWORD"),
+        MAIL_DEFAULT_SENDER=os.environ.get("MAIL_DEFAULT_SENDER", "noreply@example.com"),
     )
 
     if test_config is not None:
@@ -52,6 +58,9 @@ def create_app(test_config=None):
 
     # Login manager
     init_login_manager(app)
+
+    # Email
+    email.init_app(app)
 
     # CSRF protection
     @app.context_processor

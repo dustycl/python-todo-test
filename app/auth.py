@@ -13,6 +13,7 @@ from flask_login import (
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from .db import get_db
+from .email import send_welcome_email
 
 logger = logging.getLogger(__name__)
 
@@ -156,6 +157,7 @@ def register():
                 error = "An error occurred during registration."
             else:
                 logger.info("User registered: %s (admin=%s)", email, is_admin)
+                send_welcome_email(email, first_name)
                 flash("Registration successful. Please log in.", "success")
                 return redirect(url_for("auth.login"))
 
