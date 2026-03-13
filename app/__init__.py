@@ -13,6 +13,13 @@ from .auth import init_login_manager
 from .todos import bp as todos_bp
 
 
+def _fix_db_url(url):
+    """Normalize postgres:// to postgresql:// for psycopg2 compatibility (Railway/Heroku)."""
+    if url.startswith("postgres://"):
+        return "postgresql://" + url[len("postgres://"):]
+    return url
+
+
 def create_app(test_config=None):
     """Create and configure the Flask application.
 
@@ -23,9 +30,9 @@ def create_app(test_config=None):
 
     app.config.from_mapping(
         SECRET_KEY=os.environ.get("SECRET_KEY", "dev"),
-        DATABASE_URL=os.environ.get(
+        DATABASE_URL=_fix_db_url(os.environ.get(
             "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/todo_db"
-        ),
+        )),
         MAIL_SERVER=os.environ.get("MAIL_SERVER", "localhost"),
         MAIL_PORT=int(os.environ.get("MAIL_PORT", 587)),
         MAIL_USE_TLS=os.environ.get("MAIL_USE_TLS", "true").lower() == "true",
