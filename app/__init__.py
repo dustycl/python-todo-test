@@ -15,6 +15,9 @@ from .todos import bp as todos_bp
 
 def _fix_db_url(url):
     """Normalize postgres:// to postgresql:// for psycopg2 compatibility (Railway/Heroku)."""
+    import re
+    masked = re.sub(r"://([^:]+):([^@]+)@", r"://\1:***@", url)
+    print(f"DATABASE_URL: {masked}", flush=True)
     if url.startswith("postgres://"):
         return "postgresql://" + url[len("postgres://"):]
     return url
