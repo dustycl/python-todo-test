@@ -125,20 +125,13 @@ def _baseline_existing_db(db):
 
 def run_migrations():
     """Apply all pending migrations and return the number applied."""
-    import sys
-    print("run_migrations: connecting to DB", flush=True, file=sys.stderr)
     db = get_db()
-    print("run_migrations: connected, ensuring migrations table", flush=True, file=sys.stderr)
     _ensure_migrations_table(db)
-    print("run_migrations: baselining", flush=True, file=sys.stderr)
     _baseline_existing_db(db)
-    print("run_migrations: checking pending", flush=True, file=sys.stderr)
 
     pending = _get_pending_migrations(db)
-    print(f"run_migrations: {len(pending)} pending", flush=True, file=sys.stderr)
     cur = db.cursor()
     for version, filepath in pending:
-        print(f"run_migrations: applying {filepath}", flush=True, file=sys.stderr)
         with open(filepath) as f:
             sql = f.read()
         cur.execute(sql)
@@ -147,9 +140,7 @@ def run_migrations():
             (version,),
         )
         db.commit()
-        print(f"run_migrations: applied version {version}", flush=True, file=sys.stderr)
 
-    print("run_migrations: done", flush=True, file=sys.stderr)
     return len(pending)
 
 

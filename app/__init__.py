@@ -47,16 +47,12 @@ def create_app(test_config=None):
         app.config.from_mapping(test_config)
 
     # Ensure instance folder exists
-    import sys
-    print("create_app: makedirs", flush=True, file=sys.stderr)
     os.makedirs(app.instance_path, exist_ok=True)
 
     # Configure logging (stderr only — Railway captures stderr)
-    print("create_app: logging setup", flush=True, file=sys.stderr)
     app.logger.setLevel(logging.DEBUG if app.debug else logging.INFO)
 
     # Initialize database
-    print("create_app: db init", flush=True, file=sys.stderr)
     db.init_app(app)
 
     # Login manager
@@ -120,9 +116,5 @@ def create_app(test_config=None):
     app.register_blueprint(admin_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(todos_bp)
-
-    # Run any pending database migrations
-    with app.app_context():
-        db.run_migrations()
 
     return app
