@@ -18,6 +18,7 @@ def get_db():
         g.db = psycopg2.connect(
             current_app.config["DATABASE_URL"],
             cursor_factory=psycopg2.extras.RealDictCursor,
+            connect_timeout=10,
         )
     return g.db
 
