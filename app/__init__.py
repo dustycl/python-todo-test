@@ -117,4 +117,8 @@ def create_app(test_config=None):
     app.register_blueprint(auth_bp)
     app.register_blueprint(todos_bp)
 
+    @app.route("/health")
+    def health():
+        return "OK", 200
+
     return app
