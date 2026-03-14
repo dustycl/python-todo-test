@@ -33,9 +33,7 @@ def create_app(test_config=None):
 
     app.config.from_mapping(
         SECRET_KEY=os.environ.get("SECRET_KEY", "dev"),
-        DATABASE_URL=os.environ.get(
-            "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/todo_db"
-        ),
+        DATABASE_URL=_fix_db_url(os.environ.get("DATABASE_URL")),
         MAIL_SERVER=os.environ.get("MAIL_SERVER", "localhost"),
         MAIL_PORT=int(os.environ.get("MAIL_PORT", 587)),
         MAIL_USE_TLS=os.environ.get("MAIL_USE_TLS", "true").lower() == "true",
