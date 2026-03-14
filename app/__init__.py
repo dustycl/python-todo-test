@@ -2,7 +2,6 @@ import logging
 import os
 import secrets
 import time
-from logging.handlers import RotatingFileHandler
 
 from flask import Flask, g, render_template, request, session
 
@@ -48,22 +47,16 @@ def create_app(test_config=None):
         app.config.from_mapping(test_config)
 
     # Ensure instance folder exists
+    import sys
+    print("create_app: makedirs", flush=True, file=sys.stderr)
     os.makedirs(app.instance_path, exist_ok=True)
 
-    # Configure logging
-    formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
-    if not app.debug and not app.testing:
-        file_handler = RotatingFileHandler(
-            os.path.join(app.instance_path, "app.log"),
-            maxBytes=1_000_000,
-            backupCount=5,
-        )
-        file_handler.setLevel(logging.INFO)
-        file_handler.setFormatter(formatter)
-        app.logger.addHandler(file_handler)
+    # Configure logging (stderr only — Railway captures stderr)
+    print("create_app: logging setup", flush=True, file=sys.stderr)
     app.logger.setLevel(logging.DEBUG if app.debug else logging.INFO)
 
     # Initialize database
+    print("create_app: db init", flush=True, file=sys.stderr)
     db.init_app(app)
 
     # Login manager
