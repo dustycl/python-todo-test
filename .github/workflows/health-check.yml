@@ -1,0 +1,22 @@
+name: Post-deploy health check
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for Railway deployment
+        run: sleep 60
+
+      - name: Check /health endpoint
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ secrets.RAILWAY_APP_URL }}/health")
+          echo "Health check status: $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "Health check failed with status $STATUS"
+            exit 1
+          fi
+          echo "Health check passed"
