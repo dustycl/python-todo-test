@@ -1,3 +1,19 @@
+/* === Base === */
+
+html, body {
+    height: 100%;
+}
+
+body {
+    display: flex;
+    flex-direction: column;
+}
+
+body > main {
+    flex: 1;
+    min-height: 0;
+}
+
 /* === Layout & Spacing === */
 
 .todo-page h2 {
@@ -359,3 +375,111 @@
 }
 
 /* === Filter auto-submit script === */
+
+/* === Auth Split Layout === */
+
+.auth-main {
+    padding: 0;
+    overflow: hidden;
+}
+
+.auth-split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    height: 100%;
+}
+
+.auth-panel {
+    background: var(--pico-primary-background);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 2.5rem;
+}
+
+.auth-panel-inner {
+    max-width: 22rem;
+    text-align: center;
+}
+
+.auth-panel-inner h1 {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+    color: #fff;
+}
+
+.auth-panel-inner p {
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 1.05rem;
+    margin-bottom: 2rem;
+}
+
+.auth-illustration {
+    width: 100%;
+    max-width: 18rem;
+    height: auto;
+}
+
+.auth-form-panel {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    overflow-y: auto;
+}
+
+.auth-form-panel article {
+    width: 100%;
+    max-width: 22rem;
+}
+
+.reg-step-indicator {
+    display: flex;
+    gap: 0.4rem;
+    margin-bottom: 1.25rem;
+}
+
+.reg-step {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: var(--pico-muted-border-color);
+    transition: background 0.2s;
+}
+
+.reg-step.active {
+    background: var(--pico-primary);
+    width: 1.25rem;
+    border-radius: 0.25rem;
+}
+
+.reg-step2-buttons {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.reg-step2-buttons button {
+    flex: 1;
+    margin: 0;
+}
+
+@media (max-width: 768px) {
+    .auth-main {
+        height: auto;
+        overflow: visible;
+    }
+
+    .auth-split {
+        grid-template-columns: 1fr;
+        height: auto;
+    }
+
+    .auth-panel {
+        display: none;
+    }
+
+    .auth-form-panel {
+        padding: 2rem 1.25rem;
+        overflow-y: visible;
+    }
+}
