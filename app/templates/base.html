@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}Todo App{% endblock %}</title>
+    <title>{% block title %}Todooly{% endblock %}</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
@@ -11,7 +11,7 @@
     <header class="container">
         <nav>
             <ul>
-                <li><strong><a href="{{ url_for('todos.list_todos') if current_user.is_authenticated else url_for('auth.login') }}">Todo App</a></strong></li>
+                <li><strong><a href="{{ url_for('todos.list_todos') if current_user.is_authenticated else url_for('auth.login') }}">Todooly</a></strong></li>
             </ul>
             <ul>
                 {% if current_user.is_authenticated %}

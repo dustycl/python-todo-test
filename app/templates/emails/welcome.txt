@@ -1,4 +1,4 @@
-Welcome to Todo App!
+Welcome to Todooly!
 
 Hi {{ first_name }},
 
@@ -7,4 +7,4 @@ Thanks for signing up! Your account is ready to go.
 You can now log in and start organizing your tasks.
 
 Happy organizing!
-The Todo App Team
+The Todooly Team

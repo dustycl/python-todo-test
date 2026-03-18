@@ -27,7 +27,7 @@ def send_welcome_email(email, first_name):
                 resend.Emails.send({
                     "from": app.config["MAIL_DEFAULT_SENDER"],
                     "to": email,
-                    "subject": "Welcome to Todo App!",
+                    "subject": "Welcome to Todooly!",
                     "text": body,
                     "html": html,
                 })
