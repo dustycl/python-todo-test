@@ -1,6 +1,6 @@
 flask
 flask-login
-flask-mail
+resend
 gunicorn
 psycopg2-binary
 python-dotenv

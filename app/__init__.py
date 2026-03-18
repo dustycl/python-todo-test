@@ -35,12 +35,8 @@ def create_app(test_config=None):
     app.config.from_mapping(
         SECRET_KEY=os.environ.get("SECRET_KEY", "dev"),
         DATABASE_URL=_fix_db_url(os.environ.get("DATABASE_URL")),
-        MAIL_SERVER=os.environ.get("MAIL_SERVER", "localhost"),
-        MAIL_PORT=int(os.environ.get("MAIL_PORT", 587)),
-        MAIL_USE_TLS=os.environ.get("MAIL_USE_TLS", "true").lower() == "true",
-        MAIL_USERNAME=os.environ.get("MAIL_USERNAME"),
-        MAIL_PASSWORD=os.environ.get("MAIL_PASSWORD"),
-        MAIL_DEFAULT_SENDER=os.environ.get("MAIL_DEFAULT_SENDER", "noreply@example.com"),
+        RESEND_API_KEY=os.environ.get("RESEND_API_KEY"),
+        MAIL_DEFAULT_SENDER=os.environ.get("MAIL_DEFAULT_SENDER", "onboarding@resend.dev"),
     )
 
     if test_config is not None:
