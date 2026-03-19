@@ -158,8 +158,10 @@ def register():
             else:
                 logger.info("User registered: %s (admin=%s)", email, is_admin)
                 send_welcome_email(email, first_name)
-                flash("Registration successful. Please log in.", "success")
-                return redirect(url_for("auth.login"))
+                user = User(new_user_id, None, email, first_name, last_name, is_admin)
+                login_user(user)
+                flash("Welcome to Todooly!", "success")
+                return redirect(url_for("todos.list_todos"))
 
         flash(error, "error")
 
