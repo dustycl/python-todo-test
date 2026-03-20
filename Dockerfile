@@ -23,4 +23,4 @@ USER appuser
 ENV PORT=8000
 EXPOSE ${PORT}
 
-CMD gunicorn --bind "0.0.0.0:${PORT}" "app:create_app()"
+CMD flask --app app migrate && gunicorn --bind "0.0.0.0:${PORT}" "app:create_app()"

@@ -7,6 +7,7 @@ from flask import Flask, g, render_template, request, session
 
 from . import db, email
 from .admin import bp as admin_bp
+from .analytics import bp as analytics_bp
 from .auth import bp as auth_bp
 from .auth import init_login_manager
 from .todos import bp as todos_bp
@@ -110,6 +111,7 @@ def create_app(test_config=None):
 
     # Register blueprints
     app.register_blueprint(admin_bp)
+    app.register_blueprint(analytics_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(todos_bp)
 

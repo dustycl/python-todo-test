@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+
+{% block title %}Your Stats – Todooly{% endblock %}
+
+{% block content %}
+<h2>Your Stats</h2>
+
+<!-- Summary cards -->
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1rem;margin-bottom:2rem">
+    <article style="margin:0;text-align:center">
+        <div style="font-size:2rem;font-weight:bold">{{ summary.total or 0 }}</div>
+        <small>Total todos</small>
+    </article>
+    <article style="margin:0;text-align:center">
+        <div style="font-size:2rem;font-weight:bold">{{ summary.completed or 0 }}</div>
+        <small>Completed</small>
+    </article>
+    <article style="margin:0;text-align:center">
+        <div style="font-size:2rem;font-weight:bold">{{ summary.completion_rate_pct or 0 }}%</div>
+        <small>Completion rate</small>
+    </article>
+    <article style="margin:0;text-align:center">
+        <div style="font-size:2rem;font-weight:bold">
+            {% if summary.avg_hours_to_complete %}
+                {% if summary.avg_hours_to_complete < 24 %}
+                    {{ summary.avg_hours_to_complete }}h
+                {% else %}
+                    {{ (summary.avg_hours_to_complete / 24)|round|int }}d
+                {% endif %}
+            {% else %}
+                —
+            {% endif %}
+        </div>
+        <small>Avg time to complete</small>
+    </article>
+    <article style="margin:0;text-align:center">
+        <div style="font-size:2rem;font-weight:bold">{{ summary.overdue_count or 0 }}</div>
+        <small>Overdue</small>
+    </article>
+</div>
+
+<!-- Completion by day of week -->
+<section>
+    <h3>Completions by Day of Week</h3>
+    {% if by_day %}
+    <canvas id="byDayChart" style="max-height:280px;margin-bottom:1rem"></canvas>
+    <table>
+        <thead>
+            <tr><th>Day</th><th>Completions</th></tr>
+        </thead>
+        <tbody>
+            {% for row in by_day %}
+            <tr>
+                <td>{{ row.day_name }}</td>
+                <td>{{ row.completions }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p><small>Complete some todos to see your day-of-week patterns.</small></p>
+    {% endif %}
+</section>
+
+<!-- Avg time to complete by tag (secondary — requires >= 3 completed per tag) -->
+{% if time_by_tag %}
+<section>
+    <h3>Avg Time to Complete by Tag</h3>
+    <p><small>Which categories of work take you longest? Only tags with 3+ completed todos shown.</small></p>
+    <canvas id="timeByTagChart" style="max-height:280px;margin-bottom:1rem"></canvas>
+    <table>
+        <thead>
+            <tr><th>Tag</th><th>Avg time</th><th>Completed todos</th></tr>
+        </thead>
+        <tbody>
+            {% for row in time_by_tag %}
+            <tr>
+                <td>{{ row.tag }}</td>
+                <td>
+                    {% if row.avg_hours < 24 %}
+                        {{ row.avg_hours }}h
+                    {% else %}
+                        {{ (row.avg_hours / 24)|round|int }}d
+                    {% endif %}
+                </td>
+                <td>{{ row.completed_count }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endif %}
+
+<!-- Overdue rate by tag (secondary) -->
+{% if overdue_by_tag %}
+<section>
+    <h3>Overdue Rate by Tag</h3>
+    <p><small>Which categories do you consistently miss deadlines on? Only tags with 3+ due-date todos shown.</small></p>
+    <table>
+        <thead>
+            <tr><th>Tag</th><th>Overdue rate</th><th>Overdue / Total</th></tr>
+        </thead>
+        <tbody>
+            {% for row in overdue_by_tag %}
+            <tr>
+                <td>{{ row.tag }}</td>
+                <td>{{ row.overdue_pct }}%</td>
+                <td>{{ row.overdue }} / {{ row.total_with_due }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endif %}
+
+{% if by_day or time_by_tag %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+    const gridColor = 'rgba(0,0,0,0.08)';
+
+    {% if by_day %}
+    new Chart(document.getElementById('byDayChart'), {
+        type: 'bar',
+        data: {
+            labels: {{ by_day | map(attribute='day_name') | list | tojson }},
+            datasets: [{
+                label: 'Completions',
+                data: {{ by_day | map(attribute='completions') | list | tojson }},
+                backgroundColor: 'rgba(99,102,241,0.7)',
+                borderRadius: 4,
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: gridColor } },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+    {% endif %}
+
+    {% if time_by_tag %}
+    new Chart(document.getElementById('timeByTagChart'), {
+        type: 'bar',
+        data: {
+            labels: {{ time_by_tag | map(attribute='tag') | list | tojson }},
+            datasets: [{
+                label: 'Avg hours',
+                data: {{ time_by_tag | map(attribute='avg_hours') | list | tojson }},
+                backgroundColor: 'rgba(16,185,129,0.7)',
+                borderRadius: 4,
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, grid: { color: gridColor }, title: { display: true, text: 'Hours' } },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+    {% endif %}
+})();
+</script>
+{% endif %}
+{% endblock %}

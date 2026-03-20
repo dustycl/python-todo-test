@@ -241,7 +241,8 @@ def toggle(todo_id):
         cur = db.cursor()
         cur.execute(
             "UPDATE todos SET completed = NOT completed,"
-            " updated_at = CURRENT_TIMESTAMP"
+            " updated_at = CURRENT_TIMESTAMP,"
+            " completed_at = CASE WHEN completed = false THEN CURRENT_TIMESTAMP ELSE NULL END"
             " WHERE id = %s AND user_id = %s AND deleted_at IS NULL",
             (todo_id, current_user.id),
         )

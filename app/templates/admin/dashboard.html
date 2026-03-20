@@ -12,7 +12,32 @@
         <header>Signups (Last 30 Days)</header>
         <p style="font-size:2rem;font-weight:bold">{{ recent_signups }}</p>
     </article>
+    <article>
+        <header>Platform Completion Rate</header>
+        <p style="font-size:2rem;font-weight:bold">{{ platform_completion_pct or 0 }}%</p>
+    </article>
+    <article>
+        <header>Platform Overdue Rate</header>
+        <p style="font-size:2rem;font-weight:bold">{{ platform_overdue_pct or 0 }}%</p>
+    </article>
 </div>
+
+{% if top_tags %}
+<h3>Most Used Tags</h3>
+<table>
+    <thead>
+        <tr><th>Tag</th><th>Uses</th></tr>
+    </thead>
+    <tbody>
+        {% for tag in top_tags %}
+        <tr>
+            <td>{{ tag.name }}</td>
+            <td>{{ tag.usage_count }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
 
 <h3>Admin Invites</h3>
 <form method="post" action="{{ url_for('admin.create_invite') }}" style="margin-bottom:1rem">

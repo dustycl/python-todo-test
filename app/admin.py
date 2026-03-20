@@ -75,6 +75,30 @@ def dashboard():
     )
     used_invites = cur.fetchall()
 
+    # Platform analytics
+    cur.execute(
+        "SELECT ROUND(100.0 * COUNT(*) FILTER (WHERE completed = true)"
+        " / NULLIF(COUNT(*), 0)) AS platform_completion_pct"
+        " FROM todos WHERE deleted_at IS NULL"
+    )
+    platform_completion_pct = cur.fetchone()["platform_completion_pct"]
+
+    cur.execute(
+        "SELECT t.name, COUNT(*) AS usage_count"
+        " FROM tags t JOIN todo_tags tt ON tt.tag_id = t.id"
+        " GROUP BY t.name ORDER BY usage_count DESC LIMIT 10"
+    )
+    top_tags = cur.fetchall()
+
+    cur.execute(
+        "SELECT ROUND(100.0 * COUNT(*) FILTER ("
+        "    WHERE due_date < CURRENT_DATE AND completed = false"
+        "  ) / NULLIF(COUNT(*) FILTER (WHERE due_date IS NOT NULL), 0)"
+        ") AS overdue_pct"
+        " FROM todos WHERE deleted_at IS NULL"
+    )
+    platform_overdue_pct = cur.fetchone()["overdue_pct"]
+
     return render_template(
         "admin/dashboard.html",
         total_users=total_users,
@@ -82,6 +106,9 @@ def dashboard():
         users=users,
         active_invites=active_invites,
         used_invites=used_invites,
+        platform_completion_pct=platform_completion_pct,
+        top_tags=top_tags,
+        platform_overdue_pct=platform_overdue_pct,
     )
 
 
