@@ -113,7 +113,55 @@
 </section>
 {% endif %}
 
-{% if by_day or time_by_tag %}
+<!-- Hour of day: creation -->
+{% if hour_of_day_created | length >= 3 %}
+<section>
+    <h3>When You Add Todos <small style="font-weight:normal;font-size:0.75em;color:var(--pico-muted-color)">UTC</small></h3>
+    <p><small>Which hours of the day you most often create todos.</small></p>
+    <canvas id="hourCreatedChart" style="max-height:280px;margin-bottom:1rem"></canvas>
+</section>
+{% endif %}
+
+<!-- Hour of day: completion -->
+{% if hour_of_day_completed | length >= 3 %}
+<section>
+    <h3>When You Complete Todos <small style="font-weight:normal;font-size:0.75em;color:var(--pico-muted-color)">UTC</small></h3>
+    <p><small>Which hours of the day you most often mark todos done.</small></p>
+    <canvas id="hourCompletedChart" style="max-height:280px;margin-bottom:1rem"></canvas>
+</section>
+{% endif %}
+
+<!-- Batching behavior -->
+{% set show_creation_batch = creation_batching and creation_batching.total_todos and creation_batching.total_todos >= 3 %}
+{% set show_completion_batch = completion_batching and completion_batching.total_todos and completion_batching.total_todos >= 3 %}
+{% if show_creation_batch or show_completion_batch %}
+<section>
+    <h3>Batching Behavior</h3>
+    <p><small>Do you tend to add or complete todos in bursts? A session is consecutive actions within 15 minutes.</small></p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem">
+        {% if show_creation_batch %}
+        <article style="margin:0;text-align:center">
+            <div style="font-size:1.75rem;font-weight:bold">{{ creation_batching.pct_in_batches or 0 }}%</div>
+            <small>added in batches</small>
+            <div style="margin-top:0.5rem;color:var(--pico-muted-color)">
+                <small>Avg batch size: {{ creation_batching.avg_batch_size or '—' }} &nbsp;·&nbsp; {{ creation_batching.total_sessions }} session{{ 's' if creation_batching.total_sessions != 1 else '' }}</small>
+            </div>
+        </article>
+        {% endif %}
+        {% if show_completion_batch %}
+        <article style="margin:0;text-align:center">
+            <div style="font-size:1.75rem;font-weight:bold">{{ completion_batching.pct_in_batches or 0 }}%</div>
+            <small>completed in batches</small>
+            <div style="margin-top:0.5rem;color:var(--pico-muted-color)">
+                <small>Avg session size: {{ completion_batching.avg_batch_size or '—' }} &nbsp;·&nbsp; {{ completion_batching.total_sessions }} session{{ 's' if completion_batching.total_sessions != 1 else '' }}</small>
+            </div>
+        </article>
+        {% endif %}
+    </div>
+</section>
+{% endif %}
+
+{% if by_day or time_by_tag or (hour_of_day_created | length >= 3) or (hour_of_day_completed | length >= 3) %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script>
 (function() {
@@ -160,6 +208,52 @@
             scales: {
                 y: { beginAtZero: true, grid: { color: gridColor }, title: { display: true, text: 'Hours' } },
                 x: { grid: { display: false } }
+            }
+        }
+    });
+    {% endif %}
+
+    {% if hour_of_day_created | length >= 3 %}
+    new Chart(document.getElementById('hourCreatedChart'), {
+        type: 'bar',
+        data: {
+            labels: {{ hour_of_day_created | map(attribute='hour') | list | tojson }},
+            datasets: [{
+                label: 'Todos created',
+                data: {{ hour_of_day_created | map(attribute='count') | list | tojson }},
+                backgroundColor: 'rgba(99,102,241,0.7)',
+                borderRadius: 4,
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: gridColor } },
+                x: { grid: { display: false }, title: { display: true, text: 'Hour (UTC)' } }
+            }
+        }
+    });
+    {% endif %}
+
+    {% if hour_of_day_completed | length >= 3 %}
+    new Chart(document.getElementById('hourCompletedChart'), {
+        type: 'bar',
+        data: {
+            labels: {{ hour_of_day_completed | map(attribute='hour') | list | tojson }},
+            datasets: [{
+                label: 'Todos completed',
+                data: {{ hour_of_day_completed | map(attribute='count') | list | tojson }},
+                backgroundColor: 'rgba(16,185,129,0.7)',
+                borderRadius: 4,
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: gridColor } },
+                x: { grid: { display: false }, title: { display: true, text: 'Hour (UTC)' } }
             }
         }
     });

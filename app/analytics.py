@@ -103,6 +103,103 @@ def stats():
     )
     overdue_by_tag = cur.fetchall()
 
+    # Hour of day: when todos are created
+    cur.execute(
+        """
+        SELECT
+            EXTRACT(HOUR FROM created_at)::int AS hour,
+            COUNT(*) AS count
+        FROM todos
+        WHERE user_id = %s AND deleted_at IS NULL
+        GROUP BY hour
+        ORDER BY hour
+        """,
+        (current_user.id,),
+    )
+    hour_of_day_created = cur.fetchall()
+
+    # Hour of day: when todos are completed
+    cur.execute(
+        """
+        SELECT
+            EXTRACT(HOUR FROM completed_at)::int AS hour,
+            COUNT(*) AS count
+        FROM todos
+        WHERE user_id = %s AND completed = true AND completed_at IS NOT NULL
+            AND deleted_at IS NULL
+        GROUP BY hour
+        ORDER BY hour
+        """,
+        (current_user.id,),
+    )
+    hour_of_day_completed = cur.fetchall()
+
+    # Creation batching: sessions = consecutive todos created within 15 min
+    cur.execute(
+        """
+        WITH gaps AS (
+            SELECT id, created_at,
+                   LAG(created_at) OVER (ORDER BY created_at) AS prev_created_at
+            FROM todos WHERE user_id = %s AND deleted_at IS NULL
+        ),
+        sessions AS (
+            SELECT id,
+                   SUM(CASE WHEN prev_created_at IS NULL
+                                 OR EXTRACT(EPOCH FROM (created_at - prev_created_at)) > 900
+                            THEN 1 ELSE 0 END) OVER (ORDER BY created_at) AS session_id
+            FROM gaps
+        ),
+        session_sizes AS (
+            SELECT session_id, COUNT(*) AS session_size FROM sessions GROUP BY session_id
+        )
+        SELECT
+            SUM(session_size) AS total_todos,
+            COUNT(*) AS total_sessions,
+            ROUND(SUM(session_size)::numeric / NULLIF(COUNT(*), 0), 1) AS avg_session_size,
+            SUM(session_size) FILTER (WHERE session_size >= 2) AS todos_in_batches,
+            ROUND(100.0 * SUM(session_size) FILTER (WHERE session_size >= 2)
+                / NULLIF(SUM(session_size), 0)) AS pct_in_batches,
+            ROUND(AVG(session_size) FILTER (WHERE session_size >= 2), 1) AS avg_batch_size
+        FROM session_sizes
+        """,
+        (current_user.id,),
+    )
+    creation_batching = cur.fetchone()
+
+    # Completion batching: sessions = consecutive completions within 15 min
+    cur.execute(
+        """
+        WITH gaps AS (
+            SELECT id, completed_at,
+                   LAG(completed_at) OVER (ORDER BY completed_at) AS prev_completed_at
+            FROM todos
+            WHERE user_id = %s AND completed = true AND completed_at IS NOT NULL
+                AND deleted_at IS NULL
+        ),
+        sessions AS (
+            SELECT id,
+                   SUM(CASE WHEN prev_completed_at IS NULL
+                                 OR EXTRACT(EPOCH FROM (completed_at - prev_completed_at)) > 900
+                            THEN 1 ELSE 0 END) OVER (ORDER BY completed_at) AS session_id
+            FROM gaps
+        ),
+        session_sizes AS (
+            SELECT session_id, COUNT(*) AS session_size FROM sessions GROUP BY session_id
+        )
+        SELECT
+            SUM(session_size) AS total_todos,
+            COUNT(*) AS total_sessions,
+            ROUND(SUM(session_size)::numeric / NULLIF(COUNT(*), 0), 1) AS avg_session_size,
+            SUM(session_size) FILTER (WHERE session_size >= 2) AS todos_in_batches,
+            ROUND(100.0 * SUM(session_size) FILTER (WHERE session_size >= 2)
+                / NULLIF(SUM(session_size), 0)) AS pct_in_batches,
+            ROUND(AVG(session_size) FILTER (WHERE session_size >= 2), 1) AS avg_batch_size
+        FROM session_sizes
+        """,
+        (current_user.id,),
+    )
+    completion_batching = cur.fetchone()
+
     logger.info("Stats page loaded for user %s", current_user.id)
 
     return render_template(
@@ -111,4 +208,8 @@ def stats():
         by_day=by_day,
         time_by_tag=time_by_tag,
         overdue_by_tag=overdue_by_tag,
+        hour_of_day_created=hour_of_day_created,
+        hour_of_day_completed=hour_of_day_completed,
+        creation_batching=creation_batching,
+        completion_batching=completion_batching,
     )
