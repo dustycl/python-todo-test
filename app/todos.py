@@ -5,6 +5,7 @@ from flask import Blueprint, abort, flash, redirect, render_template, request, u
 from flask_login import current_user, login_required
 
 from .db import get_db
+from . import posthog_client
 
 logger = logging.getLogger(__name__)
 
@@ -220,6 +221,11 @@ def add():
             if tag_names:
                 _sync_tags(db, current_user.id, todo_id, tag_names)
             db.commit()
+            posthog_client.capture(current_user.id, "todo_created", {
+                "has_due_date": due_date is not None,
+                "has_tags": len(tag_names) > 0,
+                "has_description": description is not None,
+            })
             logger.info("Todo created by user %s: %r", current_user.id, title)
             flash("Todo added.", "success")
         except Exception:
@@ -372,6 +378,7 @@ def delete(todo_id):
         )
         abort(404)
 
+    posthog_client.capture(current_user.id, "todo_deleted")
     logger.info("Todo %s soft-deleted by user %s", todo_id, current_user.id)
     undo_url = url_for("todos.restore", todo_id=todo_id)
     flash(

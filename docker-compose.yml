@@ -24,6 +24,7 @@ services:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/todo_db
       - RESEND_API_KEY=${RESEND_API_KEY:-}
       - MAIL_DEFAULT_SENDER=${MAIL_DEFAULT_SENDER:-onboarding@resend.dev}
+      - POSTHOG_API_KEY=${POSTHOG_API_KEY:-}
     depends_on:
       db:
         condition: service_healthy

@@ -4,6 +4,7 @@ resend
 gunicorn
 psycopg2-binary
 python-dotenv
+posthog
 pytest
 pytest-cov
 ruff

@@ -14,6 +14,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from .db import get_db
 from .email import send_welcome_email
+from . import posthog_client
 
 logger = logging.getLogger(__name__)
 
@@ -159,6 +160,7 @@ def register():
                 logger.info("User registered: %s (admin=%s)", email, is_admin)
                 send_welcome_email(email, first_name)
                 user = User(new_user_id, None, email, first_name, last_name, is_admin)
+                posthog_client.capture(new_user_id, "user_signed_up", {"email": email})
                 login_user(user)
                 flash("Welcome to Todooly!", "success")
                 return redirect(url_for("todos.list_todos"))
@@ -209,6 +211,7 @@ def login():
                 row["id"], row["username"], row["email"],
                 row["first_name"], row["last_name"], row["is_admin"],
             )
+            posthog_client.capture(user.id, "user_logged_in")
             login_user(user)
             logger.info("User logged in: %s (id=%s)", identifier, user.id)
             next_page = request.args.get("next")

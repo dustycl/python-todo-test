@@ -5,7 +5,7 @@ import time
 
 from flask import Flask, g, render_template, request, session
 
-from . import db, email
+from . import db, email, posthog_client
 from .admin import bp as admin_bp
 from .analytics import bp as analytics_bp
 from .auth import bp as auth_bp
@@ -38,6 +38,7 @@ def create_app(test_config=None):
         DATABASE_URL=_fix_db_url(os.environ.get("DATABASE_URL")),
         RESEND_API_KEY=os.environ.get("RESEND_API_KEY"),
         MAIL_DEFAULT_SENDER=os.environ.get("MAIL_DEFAULT_SENDER", "onboarding@resend.dev"),
+        POSTHOG_API_KEY=os.environ.get("POSTHOG_API_KEY"),
     )
 
     if test_config is not None:
@@ -57,6 +58,13 @@ def create_app(test_config=None):
 
     # Email
     email.init_app(app)
+
+    # PostHog analytics
+    posthog_client.init_app(app)
+
+    @app.context_processor
+    def inject_posthog_key():
+        return {"posthog_api_key": app.config.get("POSTHOG_API_KEY", "")}
 
     # CSRF protection
     @app.context_processor
