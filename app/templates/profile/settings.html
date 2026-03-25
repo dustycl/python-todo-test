@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - Todooly{% endblock %}
+
+{% block content %}
+<h1>Settings</h1>
+
+<section id="profile">
+    <h2>Profile</h2>
+    <article>
+        <form method="post" action="{{ url_for('profile.update_profile') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div class="grid">
+                <label>
+                    First name
+                    <input type="text" name="first_name" value="{{ user.first_name or '' }}" required maxlength="100">
+                </label>
+                <label>
+                    Last name
+                    <input type="text" name="last_name" value="{{ user.last_name or '' }}" required maxlength="100">
+                </label>
+            </div>
+            <label>
+                Email
+                <input type="email" name="email" value="{{ user.email or '' }}" required maxlength="254">
+            </label>
+            <button type="submit">Save Profile</button>
+        </form>
+    </article>
+</section>
+
+<section id="password">
+    <h2>Change Password</h2>
+    <article>
+        <form method="post" action="{{ url_for('profile.change_password') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <label>
+                Current password
+                <input type="password" name="current_password" required autocomplete="current-password">
+            </label>
+            <label>
+                New password
+                <input type="password" name="new_password" required autocomplete="new-password" minlength="8">
+            </label>
+            <label>
+                Confirm new password
+                <input type="password" name="confirm_password" required autocomplete="new-password" minlength="8">
+            </label>
+            <button type="submit">Change Password</button>
+        </form>
+    </article>
+</section>
+
+<section id="danger">
+    <h2>Danger Zone</h2>
+    <article>
+        <p>Permanently delete your account and all your todos. <strong>This cannot be undone.</strong></p>
+        <form method="post" action="{{ url_for('profile.delete_account') }}"
+              onsubmit="return confirm('Delete your account permanently? This cannot be undone.')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <label>
+                Type your email address to confirm
+                <input type="email" name="confirm_email" required placeholder="{{ user.email or '' }}">
+            </label>
+            <button type="submit" class="contrast">Delete My Account</button>
+        </form>
+    </article>
+</section>
+{% endblock %}

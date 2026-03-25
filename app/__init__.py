@@ -10,6 +10,7 @@ from .admin import bp as admin_bp
 from .analytics import bp as analytics_bp
 from .auth import bp as auth_bp
 from .auth import init_login_manager
+from .profile import bp as profile_bp
 from .todos import bp as todos_bp
 
 
@@ -121,6 +122,7 @@ def create_app(test_config=None):
     app.register_blueprint(admin_bp)
     app.register_blueprint(analytics_bp)
     app.register_blueprint(auth_bp)
+    app.register_blueprint(profile_bp)
     app.register_blueprint(todos_bp)
 
     @app.route("/health")

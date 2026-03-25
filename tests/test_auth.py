@@ -14,7 +14,7 @@ def extract_csrf(response):
 
 def get_csrf_token(client):
     """Fetch the login page to establish a session and get a CSRF token."""
-    response = client.get("/auth/login")
+    response = client.get("/auth/login", follow_redirects=True)
     return extract_csrf(response)
 
 
@@ -73,11 +73,14 @@ def test_register_page_loads(client):
 
 def test_register_success(client):
     response = register(client)
-    assert b"Registration successful" in response.data
+    assert b"Welcome to Todooly" in response.data
 
 
 def test_register_duplicate_email(client):
     register(client, email="alice@example.com")
+    with client.session_transaction() as sess:
+        csrf = sess["csrf_token"]
+    client.post("/auth/logout", data={"csrf_token": csrf})
     response = register(client, email="alice@example.com")
     assert b"already exists" in response.data
 
@@ -136,6 +139,9 @@ def test_login_success(client):
 
 def test_login_wrong_password(client):
     register(client)
+    with client.session_transaction() as sess:
+        csrf = sess["csrf_token"]
+    client.post("/auth/logout", data={"csrf_token": csrf})
     response = login(client, password="wrongpassword")
     assert b"Invalid email or password" in response.data
 

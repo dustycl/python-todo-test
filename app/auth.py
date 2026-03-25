@@ -1,4 +1,5 @@
 import logging
+import secrets
 
 import psycopg2
 from flask import Blueprint, flash, redirect, render_template, request, url_for
@@ -13,7 +14,7 @@ from flask_login import (
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from .db import get_db
-from .email import send_welcome_email
+from .email import send_password_reset_email, send_welcome_email
 from . import posthog_client
 
 logger = logging.getLogger(__name__)
@@ -25,7 +26,7 @@ bp = Blueprint("auth", __name__, url_prefix="/auth")
 def require_profile_completion():
     if not current_user.is_authenticated:
         return
-    if request.endpoint in ("auth.complete_profile", "auth.logout", "static"):
+    if request.endpoint in ("auth.complete_profile", "auth.logout", "auth.forgot_password", "auth.reset_password", "static"):
         return
     if not current_user.profile_complete:
         return redirect(url_for("auth.complete_profile"))
@@ -273,6 +274,113 @@ def complete_profile():
         flash(error, "error")
 
     return render_template("auth/complete_profile.html")
+
+
+@bp.route("/forgot-password", methods=["GET", "POST"])
+def forgot_password():
+    if current_user.is_authenticated:
+        return redirect(url_for("todos.list_todos"))
+
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+
+        if email and "@" in email:
+            db = get_db()
+            cur = db.cursor()
+            cur.execute("SELECT id, first_name FROM users WHERE email = %s", (email,))
+            user = cur.fetchone()
+
+            if user:
+                # Clean up expired tokens for this user
+                cur.execute(
+                    "DELETE FROM password_reset_tokens "
+                    "WHERE user_id = %s AND expires_at < NOW()",
+                    (user["id"],),
+                )
+                token = secrets.token_urlsafe(32)
+                cur.execute(
+                    "INSERT INTO password_reset_tokens (user_id, token, expires_at) "
+                    "VALUES (%s, %s, NOW() + INTERVAL '1 hour')",
+                    (user["id"], token),
+                )
+                db.commit()
+                reset_url = url_for("auth.reset_password", token=token, _external=True)
+                send_password_reset_email(email, user["first_name"] or "there", reset_url)
+                logger.info("Password reset requested for user id=%s", user["id"])
+            else:
+                logger.info("Password reset requested for unknown email: %s", email)
+
+        # Always show same message to prevent email enumeration
+        flash("If an account exists for that email, a reset link has been sent.", "success")
+        return redirect(url_for("auth.login"))
+
+    return render_template("auth/forgot_password.html")
+
+
+@bp.route("/reset-password/<token>", methods=["GET", "POST"])
+def reset_password(token):
+    if current_user.is_authenticated:
+        return redirect(url_for("todos.list_todos"))
+
+    db = get_db()
+    cur = db.cursor()
+    cur.execute(
+        "SELECT id, user_id FROM password_reset_tokens "
+        "WHERE token = %s AND expires_at > NOW() AND used_at IS NULL",
+        (token,),
+    )
+    token_row = cur.fetchone()
+
+    if token_row is None:
+        flash("This reset link is invalid or has expired. Please request a new one.", "error")
+        return redirect(url_for("auth.forgot_password"))
+
+    if request.method == "POST":
+        new_password = request.form.get("new_password", "")
+        confirm = request.form.get("confirm_password", "")
+
+        error = None
+        if not new_password:
+            error = "Password is required."
+        elif len(new_password) < 8:
+            error = "Password must be at least 8 characters."
+        elif new_password != confirm:
+            error = "Passwords do not match."
+
+        if error is None:
+            from werkzeug.security import generate_password_hash
+            # Re-validate token still valid (race condition guard)
+            cur.execute(
+                "SELECT id FROM password_reset_tokens "
+                "WHERE token = %s AND expires_at > NOW() AND used_at IS NULL",
+                (token,),
+            )
+            if cur.fetchone() is None:
+                flash("This reset link is invalid or has expired.", "error")
+                return redirect(url_for("auth.forgot_password"))
+
+            cur.execute(
+                "UPDATE users SET password_hash = %s WHERE id = %s",
+                (generate_password_hash(new_password), token_row["user_id"]),
+            )
+            cur.execute(
+                "UPDATE password_reset_tokens SET used_at = NOW() WHERE token = %s",
+                (token,),
+            )
+            # Invalidate any other unused tokens for this user
+            cur.execute(
+                "DELETE FROM password_reset_tokens "
+                "WHERE user_id = %s AND used_at IS NULL AND token != %s",
+                (token_row["user_id"], token),
+            )
+            db.commit()
+            logger.info("Password reset completed for user id=%s", token_row["user_id"])
+            flash("Your password has been reset. Please log in.", "success")
+            return redirect(url_for("auth.login"))
+
+        flash(error, "error")
+
+    return render_template("auth/reset_password.html", token=token)
 
 
 @bp.route("/logout", methods=["POST"])

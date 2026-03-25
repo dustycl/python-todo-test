@@ -49,6 +49,7 @@ def test_init_db_creates_tables(app):
             "user_id",
             "title",
             "completed",
+            "completed_at",
             "due_date",
             "description",
             "deleted_at",

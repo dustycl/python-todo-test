@@ -49,6 +49,7 @@
                 <li><a href="{{ url_for('admin.dashboard') }}">Admin</a></li>
                 {% endif %}
                 <li><a href="{{ url_for('analytics.stats') }}">Stats</a></li>
+                <li><a href="{{ url_for('profile.settings') }}">Settings</a></li>
                 <li>{{ current_user.display_name }}</li>
                 <li>
                     <form method="post" action="{{ url_for('auth.logout') }}" style="margin:0">
