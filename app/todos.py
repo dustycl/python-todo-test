@@ -104,6 +104,9 @@ def _get_tags_for_todos(db, todo_ids):
 bp = Blueprint("todos", __name__)
 
 
+COMPLETED_DEFAULT_LIMIT = 20
+
+
 @bp.route("/")
 @login_required
 def list_todos():
@@ -112,66 +115,178 @@ def list_todos():
     cur = db.cursor()
     today = date.today()
 
-    # Base query — always filter by user (qualified for JOIN compatibility)
-    clauses = ["todos.user_id = %s", "todos.deleted_at IS NULL"]
-    params = [current_user.id]
-
     # Keyword search
     q = request.args.get("q", "").strip()
+    q_escaped = None
     if q:
         q_escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-        clauses.append("title ILIKE %s ESCAPE '\\'")
-        params.append(f"%{q_escaped}%")
 
     # Status filter
     status = request.args.get("status", "all")
-    if status == "active":
-        clauses.append("completed = false")
-    elif status == "completed":
-        clauses.append("completed = true")
 
     # Due date filter
     due = request.args.get("due", "all")
-    if due == "overdue":
-        clauses.append("due_date IS NOT NULL AND due_date < %s")
-        params.append(today.isoformat())
-    elif due == "today":
-        clauses.append("due_date = %s")
-        params.append(today.isoformat())
-    elif due == "week":
-        week_end = (today + timedelta(days=6)).isoformat()
-        clauses.append("due_date IS NOT NULL AND due_date >= %s AND due_date <= %s")
-        params.append(today.isoformat())
-        params.append(week_end)
-    elif due == "none":
-        clauses.append("due_date IS NULL")
 
     # Tag filter
     tag = request.args.get("tag", "all")
-    join_clause = ""
-    if tag and tag != "all":
-        join_clause = (
-            " JOIN todo_tags tt ON todos.id = tt.todo_id"
-            " JOIN tags tg ON tt.tag_id = tg.id"
+
+    # Completed section controls (only used when status == 'all')
+    completed_window = request.args.get("completed_window", "7")
+    try:
+        completed_limit = max(1, min(200, int(request.args.get("completed_limit", COMPLETED_DEFAULT_LIMIT))))
+    except ValueError:
+        completed_limit = COMPLETED_DEFAULT_LIMIT
+
+    if status != "all":
+        # Filtered view: single query, existing behaviour
+        clauses = ["todos.user_id = %s", "todos.deleted_at IS NULL"]
+        params = [current_user.id]
+
+        if q_escaped:
+            clauses.append("title ILIKE %s ESCAPE '\\'")
+            params.append(f"%{q_escaped}%")
+
+        if status == "active":
+            clauses.append("completed = false")
+        elif status == "completed":
+            clauses.append("completed = true")
+
+        if due == "overdue":
+            clauses.append("due_date IS NOT NULL AND due_date < %s")
+            params.append(today.isoformat())
+        elif due == "today":
+            clauses.append("due_date = %s")
+            params.append(today.isoformat())
+        elif due == "week":
+            week_end = (today + timedelta(days=6)).isoformat()
+            clauses.append("due_date IS NOT NULL AND due_date >= %s AND due_date <= %s")
+            params.append(today.isoformat())
+            params.append(week_end)
+        elif due == "none":
+            clauses.append("due_date IS NULL")
+
+        join_clause = ""
+        if tag and tag != "all":
+            join_clause = (
+                " JOIN todo_tags tt ON todos.id = tt.todo_id"
+                " JOIN tags tg ON tt.tag_id = tg.id"
+            )
+            clauses.append("tg.user_id = %s AND tg.name = %s")
+            params.append(current_user.id)
+            params.append(tag)
+
+        where = " AND ".join(clauses)
+        cur.execute(
+            f"SELECT todos.* FROM todos{join_clause} WHERE {where} "
+            "ORDER BY completed ASC, due_date IS NULL ASC, due_date ASC, created_at DESC",
+            params,
         )
-        clauses.append("tg.user_id = %s AND tg.name = %s")
-        params.append(current_user.id)
-        params.append(tag)
+        todos = cur.fetchall()
+        todo_ids = [t["id"] for t in todos]
+        tags_map = _get_tags_for_todos(db, todo_ids)
+        all_tags = _get_user_tags(db, current_user.id)
 
-    where = " AND ".join(clauses)
+        return render_template(
+            "todos/list.html",
+            todos=todos,
+            today=today,
+            search_q=q,
+            filter_status=status,
+            filter_due=due,
+            filter_tag=tag,
+            all_tags=all_tags,
+            tags_map=tags_map,
+            # Not used in filtered view
+            active_todos=None,
+            completed_todos=None,
+            has_more_completed=False,
+            has_older_completed=False,
+            completed_window=completed_window,
+            completed_limit=completed_limit,
+        )
+
+    # Default two-section view (status == 'all')
+    # Build shared filter conditions for search and tag
+    def _shared_clauses_params():
+        clauses = ["todos.user_id = %s", "todos.deleted_at IS NULL"]
+        params = [current_user.id]
+        join = ""
+        if q_escaped:
+            clauses.append("title ILIKE %s ESCAPE '\\'")
+            params.append(f"%{q_escaped}%")
+        if tag and tag != "all":
+            join = (
+                " JOIN todo_tags tt ON todos.id = tt.todo_id"
+                " JOIN tags tg ON tt.tag_id = tg.id"
+            )
+            clauses.append("tg.user_id = %s AND tg.name = %s")
+            params.append(current_user.id)
+            params.append(tag)
+        return clauses, params, join
+
+    # Active todos query (with due-date filter)
+    a_clauses, a_params, a_join = _shared_clauses_params()
+    a_clauses.append("completed = false")
+    if due == "overdue":
+        a_clauses.append("due_date IS NOT NULL AND due_date < %s")
+        a_params.append(today.isoformat())
+    elif due == "today":
+        a_clauses.append("due_date = %s")
+        a_params.append(today.isoformat())
+    elif due == "week":
+        week_end = (today + timedelta(days=6)).isoformat()
+        a_clauses.append("due_date IS NOT NULL AND due_date >= %s AND due_date <= %s")
+        a_params.append(today.isoformat())
+        a_params.append(week_end)
+    elif due == "none":
+        a_clauses.append("due_date IS NULL")
+
+    a_where = " AND ".join(a_clauses)
     cur.execute(
-        f"SELECT todos.* FROM todos{join_clause} WHERE {where} "
-        "ORDER BY completed ASC, due_date IS NULL ASC, due_date ASC, created_at DESC",
-        params,
+        f"SELECT todos.* FROM todos{a_join} WHERE {a_where} "
+        "ORDER BY due_date IS NULL ASC, due_date ASC, created_at DESC",
+        a_params,
     )
-    todos = cur.fetchall()
+    active_todos = cur.fetchall()
 
-    # Fetch tags for all returned todos
-    todo_ids = [t["id"] for t in todos]
+    # Completed todos query (windowed + capped)
+    c_clauses, c_params, c_join = _shared_clauses_params()
+    c_clauses.append("completed = true")
+    if completed_window == "7":
+        c_clauses.append("completed_at >= NOW() - INTERVAL '7 days'")
+
+    c_where = " AND ".join(c_clauses)
+    cur.execute(
+        f"SELECT todos.* FROM todos{c_join} WHERE {c_where} "
+        "ORDER BY completed_at DESC NULLS LAST "
+        f"LIMIT %s",
+        c_params + [completed_limit + 1],
+    )
+    completed_rows = cur.fetchall()
+    has_more_completed = len(completed_rows) > completed_limit
+    completed_todos = completed_rows[:completed_limit]
+
+    # Check if there are any completed todos older than 7 days (to show "Show older" link)
+    has_older_completed = False
+    if completed_window == "7":
+        o_clauses, o_params, o_join = _shared_clauses_params()
+        o_clauses.append("completed = true")
+        o_clauses.append("(completed_at IS NULL OR completed_at < NOW() - INTERVAL '7 days')")
+        o_where = " AND ".join(o_clauses)
+        cur.execute(
+            f"SELECT 1 FROM todos{o_join} WHERE {o_where} LIMIT 1",
+            o_params,
+        )
+        has_older_completed = cur.fetchone() is not None
+
+    # Combine for tags lookup
+    all_todos = list(active_todos) + list(completed_todos)
+    todo_ids = [t["id"] for t in all_todos]
     tags_map = _get_tags_for_todos(db, todo_ids)
-
-    # All user tags for the filter dropdown and datalist
     all_tags = _get_user_tags(db, current_user.id)
+
+    # todos is used by the has_filters result count — combine both sections
+    todos = all_todos
 
     return render_template(
         "todos/list.html",
@@ -183,6 +298,12 @@ def list_todos():
         filter_tag=tag,
         all_tags=all_tags,
         tags_map=tags_map,
+        active_todos=active_todos,
+        completed_todos=completed_todos,
+        has_more_completed=has_more_completed,
+        has_older_completed=has_older_completed,
+        completed_window=completed_window,
+        completed_limit=completed_limit,
     )
 
 

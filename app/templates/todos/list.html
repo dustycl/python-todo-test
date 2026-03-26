@@ -71,8 +71,15 @@
 </datalist>
 {% endif %}
 
-{% set active = todos | selectattr("completed", "equalto", false) | list %}
-{% set done = todos | selectattr("completed", "equalto", true) | list %}
+{% if active_todos is not none %}
+  {# Default two-section view #}
+  {% set active = active_todos %}
+  {% set done = completed_todos %}
+{% else %}
+  {# Filtered single-query view #}
+  {% set active = todos | selectattr("completed", "equalto", false) | list %}
+  {% set done = todos | selectattr("completed", "equalto", true) | list %}
+{% endif %}
 
 {% if not todos %}
 <div class="empty-state">
@@ -122,7 +129,12 @@
 
 {% if done %}
 <details class="completed-section" {% if active %}open{% endif %}>
-    <summary>Completed ({{ done | length }})</summary>
+    <summary>
+        Completed ({{ done | length }}{% if has_more_completed %}+{% endif %})
+        {% if active_todos is not none and completed_window == '7' %}
+        <small class="completed-window-label">— last 7 days</small>
+        {% endif %}
+    </summary>
     {% for todo in done %}
     <article class="todo-item">
         <form method="post" action="{{ url_for('todos.toggle', todo_id=todo['id']) }}" class="todo-toggle">
@@ -155,6 +167,20 @@
         </div>
     </article>
     {% endfor %}
+
+    {% if active_todos is not none %}
+    <div class="completed-footer">
+        {% if has_more_completed %}
+        <a href="{{ url_for('todos.list_todos', q=search_q, status=filter_status, due=filter_due, tag=filter_tag, completed_window=completed_window, completed_limit=completed_limit + 20) }}" class="completed-load-more">Load more</a>
+        {% endif %}
+        {% if has_older_completed %}
+        <a href="{{ url_for('todos.list_todos', q=search_q, status=filter_status, due=filter_due, tag=filter_tag, completed_window='all', completed_limit=completed_limit) }}" class="completed-show-older">Show older tasks</a>
+        {% endif %}
+        {% if completed_window == 'all' %}
+        <a href="{{ url_for('todos.list_todos', q=search_q, status=filter_status, due=filter_due, tag=filter_tag, completed_window='7', completed_limit=20) }}" class="completed-show-recent">Show recent only</a>
+        {% endif %}
+    </div>
+    {% endif %}
 </details>
 {% endif %}
 </div>

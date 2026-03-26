@@ -278,6 +278,23 @@ body > main {
     text-decoration: line-through;
 }
 
+.completed-window-label {
+    font-weight: normal;
+    opacity: 0.7;
+}
+
+.completed-footer {
+    display: flex;
+    gap: 1rem;
+    padding: 0.75rem 0 0.25rem;
+    font-size: 0.85rem;
+}
+
+.completed-footer a {
+    color: var(--pico-muted-color);
+    text-underline-offset: 2px;
+}
+
 /* === Empty State === */
 
 .empty-state {
